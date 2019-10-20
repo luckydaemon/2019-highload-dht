@@ -18,8 +18,7 @@ public class RocksDBIterator implements Iterator<Record>, Closeable {
     }
 
     @Override
-    public boolean hasNext()
-    {
+    public boolean hasNext() {
         return iterator.isValid();
     }
 

@@ -38,8 +38,7 @@ public final class DAOImpl implements DAO {
                     .setMaxBackgroundFlushes(2);
             final var db = RocksDB.open(options, data.getAbsolutePath());
             return new DAOImpl(db);
-        }
-        catch (RocksDBException e) {
+        }catch (RocksDBException e) {
             throw new IOException("can't create DAO", e);
         }
     }
@@ -90,8 +89,7 @@ public final class DAOImpl implements DAO {
         }
     }
 
-    private void dbClosing()
-    {
+    private void dbClosing() {
         this.open.set(false);
     }
 

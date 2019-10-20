@@ -35,7 +35,6 @@ public final class ByteBufferUtils {
      *@param key   value to shift
      *@return  shifted value
      */
-
     public static byte[] shift(@NotNull final ByteBuffer key) {
         final byte[] arrayKey = fromByteToArray(key);
         for (int i = 0; i < arrayKey.length; i++) {
