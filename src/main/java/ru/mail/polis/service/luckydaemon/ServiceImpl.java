@@ -45,8 +45,7 @@ public class ServiceImpl extends HttpServer implements Service {
     }
 
     @Path("/v0/status")
-    public Response status()
-    {
+    public Response status() {
         return new Response(Response.OK, Response.EMPTY);
     }
 
@@ -61,7 +60,6 @@ public class ServiceImpl extends HttpServer implements Service {
         if (id == null || id.isEmpty()) {
             responseSend(new Response(Response.BAD_REQUEST, "require id".getBytes(Charsets.UTF_8)), session);
         }
-        asyncExecute(() -> {
             final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
         try {
             switch (request.getMethod()) {
@@ -85,7 +83,6 @@ public class ServiceImpl extends HttpServer implements Service {
         catch (IOException exception) {
                 responseSend(new Response(Response.INTERNAL_ERROR, Response.EMPTY), session);
         }
-        });
     }
 
     private Response get(final ByteBuffer key) throws IOException {
