@@ -13,8 +13,10 @@
 !settings.gradle
 !checkstyle.xml
 !.codeclimate.yml
+<<<<<<< HEAD
 !results/*
 !*.txt
 !*.svg
+
 # ...even if they are in subdirectories
 !*/
