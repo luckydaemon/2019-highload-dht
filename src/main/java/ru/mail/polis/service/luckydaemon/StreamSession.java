@@ -52,7 +52,7 @@ public class StreamSession extends HttpSession {
         }
     }
 
-    private void closeStream() throws IOException{
+    private void closeStream() throws IOException {
         write(EMPTY, 0, EMPTY.length);
         server.incRequestsProcessed();
         if (!keepAlive()) {

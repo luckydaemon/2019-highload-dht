@@ -89,17 +89,14 @@ public final class DAOImpl implements DAO {
         }
     }
 
-    private void dbClosing() {
-        this.open.set(false);
-    }
-
     @Override
-    public void close() {
-        if (!this.open.get()) {
-            return;
+    public void close() throws IOException {
+        try {
+            db.syncWal();
+            db.close();
+        } catch (RocksDBException e) {
+            throw new IOException("Error while close", e);
         }
-        dbClosing();
-        db.close();
     }
 
     @Override

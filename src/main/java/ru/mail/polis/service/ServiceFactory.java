@@ -22,6 +22,7 @@ import java.util.Set;
 import org.jetbrains.annotations.NotNull;
 
 import ru.mail.polis.dao.DAO;
+import ru.mail.polis.service.luckydaemon.ClustersNodes;
 import ru.mail.polis.service.luckydaemon.ServiceImpl;
 
 /**
@@ -56,7 +57,7 @@ public final class ServiceFactory {
         if (port <= 0 || 65536 <= port) {
             throw new IllegalArgumentException("Port out of range");
         }
-
-        return new ServiceImpl(port, dao);
+        final ClustersNodes nodes = new ClustersNodes(topology, "http://localhost:" + port);
+        return ServiceImpl.create(port, dao, nodes);
     }
 }
