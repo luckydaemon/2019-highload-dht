@@ -84,7 +84,7 @@ public final class DAOImpl implements DAO {
             final byte[] unpackedKey = ByteBufferUtils.shift(key);
             db.delete(unpackedKey);
         }
-        catch (RocksDBException  e){
+        catch (RocksDBException e) {
             throw new IOException("can't remove", e);
         }
     }
