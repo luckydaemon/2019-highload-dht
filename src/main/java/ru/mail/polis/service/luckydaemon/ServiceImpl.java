@@ -40,6 +40,12 @@ public class ServiceImpl extends HttpServer implements Service {
     private final ClustersNodes nodes;
     private final Map<String, HttpClient> clusterClients;
 
+    /** constructor.
+     * @param config server config
+     *@param dao  dao
+     *@param nodes  nodes in use
+     * @param clusterClients map of client and nodes
+     */
     public ServiceImpl(final HttpServerConfig config,
                        @NotNull final DAO dao,
                        @NotNull final ClustersNodes nodes,
@@ -52,6 +58,11 @@ public class ServiceImpl extends HttpServer implements Service {
         this.clusterClients = clusterClients;
     }
 
+    /** method to set parameters and create an obkect.
+     *@param port -port
+     *@param dao  dao
+     * @param nodes  nodes
+     */
     public static Service create(final int port, @NotNull final DAO dao,
                                  @NotNull final ClustersNodes nodes) throws IOException {
         final var acceptor = new AcceptorConfig();
@@ -69,7 +80,6 @@ public class ServiceImpl extends HttpServer implements Service {
         return new ServiceImpl(config, dao, nodes, clusterClients);
     }
 
-
     @Path("/v0/status")
     public Response status() {
         return new Response(Response.OK, Response.EMPTY);
@@ -85,6 +95,7 @@ public class ServiceImpl extends HttpServer implements Service {
                        final HttpSession session) throws IOException {
         if (id == null || id.isEmpty()) {
             session.sendError(Response.BAD_REQUEST, "no id");
+            return;
         }
         final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
         final String keyCluster= nodes.keyCheck(key);
@@ -192,7 +203,7 @@ public class ServiceImpl extends HttpServer implements Service {
 
     @Override
     public HttpSession createSession(final Socket socket){
-        return new StreamSession(this,  socket);
+        return new StreamSession(this, socket);
     }
 
     private Response sendForward(@NotNull final String cluster, final Request request) throws IOException {

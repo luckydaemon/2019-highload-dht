@@ -31,6 +31,7 @@ public final class ByteBufferUtils {
         copy.get(array);
         return array;
     }
+
     /** shift bytes.
      *@param key   value to shift
      *@return  shifted value

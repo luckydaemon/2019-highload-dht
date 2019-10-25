@@ -18,8 +18,7 @@ public class ClustersNodes {
         this.id = id;
     }
 
-    /**
-     * check the key
+    /** check the key.
      *
      * @param key to search
      * @return id of the cluster node

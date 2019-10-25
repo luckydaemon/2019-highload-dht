@@ -71,7 +71,7 @@ public final class DAOImpl implements DAO {
     public void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
             try {
                 final byte[] unpackedKey = ByteBufferUtils.shift(key);
-                final byte[] arrayValue =  ByteBufferUtils.fromByteToArray(value);
+                final byte[] arrayValue = ByteBufferUtils.fromByteToArray(value);
                 db.put(unpackedKey, arrayValue);
             } catch (RocksDBException e) {
                 throw new IOException("can't upsert", e);
@@ -84,7 +84,7 @@ public final class DAOImpl implements DAO {
             final byte[] unpackedKey = ByteBufferUtils.shift(key);
             db.delete(unpackedKey);
         }
-        catch (RocksDBException  e) {
+        catch (RocksDBException  e){
             throw new IOException("can't remove", e);
         }
     }
