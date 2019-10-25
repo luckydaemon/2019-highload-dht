@@ -13,7 +13,6 @@
 !settings.gradle
 !checkstyle.xml
 !.codeclimate.yml
-<<<<<<< HEAD
 !results/*
 !*.txt
 !*.svg
