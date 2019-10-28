@@ -14,6 +14,12 @@ public class ClustersNodes {
     private final List<String> nodesList;
     private final String id;
 
+    /**
+     * Constructor.
+     *
+     * @param nodes set of nodes.
+     * @param id id.
+     */
     public ClustersNodes(@NotNull final Set<String> nodes, @NotNull final String id) {
         final List<String> sortedNodes = new ArrayList<>(nodes);
         Collections.sort(sortedNodes);
