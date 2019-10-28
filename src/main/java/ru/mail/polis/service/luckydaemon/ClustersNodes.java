@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Collections;
 
 public class ClustersNodes {
 
@@ -14,14 +15,17 @@ public class ClustersNodes {
     private final String id;
 
     public ClustersNodes(@NotNull final Set<String> nodes, @NotNull final String id) {
-        this.nodesList = new ArrayList<>(nodes);
+        final List<String> sortedNodes = new ArrayList<>(nodes);
+        Collections.sort(sortedNodes);
+        this.nodesList = sortedNodes;
         this.id = id;
     }
 
-    /** check the key.
+    /**
+     * Check the key.
      *
-     * @param key to search
-     * @return id of the cluster node
+     * @param key to search.
+     * @return id of the cluster node.
      */
     public String keyCheck(@NotNull final ByteBuffer key) {
         final int hashCode = key.hashCode();

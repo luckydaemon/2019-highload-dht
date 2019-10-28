@@ -9,9 +9,11 @@ public final class ByteBufferUtils {
 
     private ByteBufferUtils(){}
 
-    /** reverse shift bytes.
-     *@param key   value to shift
-     *@return  shifted value
+    /**
+     * reverse shift bytes.
+     *
+     * @param key   value to shift
+     * @return  shifted value
      */
     public static ByteBuffer revShift(@NotNull final byte[] key) {
         final byte[] copy = Arrays.copyOf(key, key.length);
@@ -21,9 +23,11 @@ public final class ByteBufferUtils {
         return ByteBuffer.wrap(copy);
     }
 
-    /** transform buffer to array.
-     *@param buffer   value to transform
-     *@return  array
+    /**
+     * transform buffer to array.
+     *
+     * @param buffer   value to transform
+     * @return  array
      */
     public static byte[] fromByteToArray(@NotNull final ByteBuffer buffer) {
         final ByteBuffer copy = buffer.duplicate();
@@ -32,9 +36,11 @@ public final class ByteBufferUtils {
         return array;
     }
 
-    /** shift bytes.
-     *@param key   value to shift
-     *@return  shifted value
+    /**
+     * shift bytes.
+     *
+     * @param key   value to shift
+     * @return  shifted value
      */
     public static byte[] shift(@NotNull final ByteBuffer key) {
         final byte[] arrayKey = fromByteToArray(key);

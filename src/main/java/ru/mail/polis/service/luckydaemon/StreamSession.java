@@ -25,7 +25,8 @@ public class StreamSession extends HttpSession {
         super(socket, httpserver);
     }
 
-    /**prepare to stream.
+    /**
+     * prepare to stream.
      *
      * @param iter data iterator
      * @throws IOException if something wrong

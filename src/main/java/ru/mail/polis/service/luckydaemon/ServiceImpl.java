@@ -40,27 +40,31 @@ public class ServiceImpl extends HttpServer implements Service {
     private final ClustersNodes nodes;
     private final Map<String, HttpClient> clusterClients;
 
-    /** constructor.
+    /**
+     * constructor.
+     *
      * @param config server config
-     *@param dao  dao
-     *@param nodes  nodes in use
+     * @param dao  dao
+     * @param nodes  nodes in use
      * @param clusterClients map of client and nodes
      */
-    public ServiceImpl(final HttpServerConfig config,
+    public ServiceImpl(@NotNull final HttpServerConfig config,
                        @NotNull final DAO dao,
                        @NotNull final ClustersNodes nodes,
                        @NotNull final Map<String, HttpClient> clusterClients) throws IOException {
         super(config);
         this.dao = dao;
         this.exec = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(),
-                new ThreadFactoryBuilder().setNameFormat("exec").build());
+                new ThreadFactoryBuilder().setNameFormat("exec-%d").build());
         this.nodes = nodes;
         this.clusterClients = clusterClients;
     }
 
-    /** method to set parameters and create an obkect.
-     *@param port -port
-     *@param dao  dao
+    /**
+     * method to set parameters and create an object.
+     *
+     * @param port -port
+     * @param dao  dao
      * @param nodes  nodes
      */
     public static Service create(final int port, @NotNull final DAO dao,
@@ -85,9 +89,11 @@ public class ServiceImpl extends HttpServer implements Service {
         return new Response(Response.OK, Response.EMPTY);
     }
 
-    /** access to entity.
-      *@param id   id
-      *@param request  request
+    /**
+     * access to entity.
+     *
+     * @param id   id
+     * @param request  request
     */
     @Path("/v0/entity")
     public void entity(@Param("id") final String id,
@@ -98,32 +104,32 @@ public class ServiceImpl extends HttpServer implements Service {
             return;
         }
         final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
-        final String keyCluster= nodes.keyCheck(key);
-            if (nodes.getCurrentNodeId().equals(keyCluster)) {
-                try {
-                    switch (request.getMethod()) {
-                        case Request.METHOD_GET:
-                            responseSend(() -> get(key), session);
-                            break;
+        final String keyCluster = nodes.keyCheck(key);
+        if (nodes.getCurrentNodeId().equals(keyCluster)) {
+            try {
+                switch (request.getMethod()) {
+                    case Request.METHOD_GET:
+                        responseSend(() -> get(key), session);
+                        break;
 
-                        case Request.METHOD_PUT:
-                            responseSend(() -> put(key, request), session);
-                            break;
+                    case Request.METHOD_PUT:
+                        responseSend(() -> put(key, request), session);
+                        break;
 
-                        case Request.METHOD_DELETE:
-                            responseSend(() -> delete(key), session);
-                            break;
+                    case Request.METHOD_DELETE:
+                        responseSend(() -> delete(key), session);
+                        break;
 
-                        default:
-                            session.sendError(Response.METHOD_NOT_ALLOWED, "wrong method");
-                            break;
-                    }
-                } catch (IOException exception) {
-                    session.sendError(Response.INTERNAL_ERROR, " ");
+                    default:
+                        session.sendError(Response.METHOD_NOT_ALLOWED, "wrong method");
+                        break;
                 }
-            } else {
-                responseSend(()->sendForward(nodes.keyCheck(key), request), session);
+            } catch (IOException exception) {
+                session.sendError(Response.INTERNAL_ERROR, " ");
             }
+        } else {
+            responseSend(() -> sendForward(nodes.keyCheck(key), request), session);
+        }
     }
 
     private Response get(final ByteBuffer key) throws IOException {
@@ -166,10 +172,12 @@ public class ServiceImpl extends HttpServer implements Service {
         });
     }
 
-    /** access to entities.
-     *@param  start first key
-     *@param end  last key
-     *@param session session
+    /**
+     * access to entities.
+     *
+     * @param  start first key
+     * @param end  last key
+     * @param session session
      */
     @Path("/v0/entities")
     public void entities(@Param("start") final String start,
