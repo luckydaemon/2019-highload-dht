@@ -48,7 +48,7 @@ public class ClustersNodes {
     }
 
     /**
-     * Get id where replicas will be
+     * Get id where replicas will be.
      *
      * @param count - how many replics
      * @param key id

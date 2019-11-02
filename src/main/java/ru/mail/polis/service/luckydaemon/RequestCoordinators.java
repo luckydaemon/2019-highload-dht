@@ -36,7 +36,7 @@ public class RequestCoordinators {
     private static final String ENTITY_HEADER = "/v0/entity?id=";
 
     /**
-     * Get id where replicas will be
+     * Get id where replicas will be.
      *
      * @param dao - dao
      * @param nodes nodes
@@ -54,7 +54,7 @@ public class RequestCoordinators {
     }
 
     /**
-     * controll put request
+     * controll put request.
      *
      * @param replicaNodes - nodes where created perlicas will be placed
      * @param request request
@@ -92,7 +92,7 @@ public class RequestCoordinators {
     }
 
     /**
-     * controll get request
+     * controll get request.
      *
      * @param replicaNodes - nodes where created perlicas will be placed
      * @param request request
@@ -155,7 +155,7 @@ public class RequestCoordinators {
     }
 
     /**
-     * controll delete request
+     * controll delete request.
      *
      * @param replicaNodes - nodes where created perlicas will be placed
      * @param request request
@@ -192,14 +192,14 @@ public class RequestCoordinators {
             return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
         }
     }
+
     /**
-     * determine action according to request
+     * determine action according to request.
      *
      * @param replicaClusters - nodes where created perlicas will be placed
      * @param request request
      * @param acks amount of acks
      * @param session - current session
-     * @return nothing
      */
     public void coordinateRequest(final String[] replicaClusters, final Request request,
                                   final int acks, final HttpSession session) throws IOException {

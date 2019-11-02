@@ -90,7 +90,7 @@ public final class DAOImpl implements DAO {
     }
 
     /**
-     * get record wuth timestamp
+     * get record wuth timestamp.
      *
      * @param key  key
      */
@@ -106,7 +106,7 @@ public final class DAOImpl implements DAO {
     }
 
     /**
-     * put record wuth timestamp
+     * put record wuth timestamp.
      *
      * @param key key
      * @param value  value
@@ -124,7 +124,7 @@ public final class DAOImpl implements DAO {
     }
 
     /**
-     * delete record wuth timestamp (put tombstone record)
+     * delete record wuth timestamp (put tombstone record).
      *
      * @param key key
      */

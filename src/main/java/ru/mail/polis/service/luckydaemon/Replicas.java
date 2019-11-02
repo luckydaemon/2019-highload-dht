@@ -27,7 +27,7 @@ public final class Replicas {
     }
 
     /**
-     * Calculate the RF
+     * Calculate the RF.
      *
      * @param replics desired amount of replics
      * @param session current session

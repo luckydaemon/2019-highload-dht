@@ -57,6 +57,7 @@ public class RecordTimestamp {
     public boolean isMissing(){
         return type == TypeOfRecord.MISSING;
     }
+
     /**
      * transform record to bytes.
      *
@@ -90,7 +91,7 @@ public class RecordTimestamp {
     }
 
     /**
-     * get value of record
+     * get value of record.
      *
      * @return value
      */
@@ -110,7 +111,7 @@ public class RecordTimestamp {
     }
 
     /**
-     * Merge manyrecords into one
+     * Merge manyrecords into one.
      *
      * @param responses records to merge
      * @return latest record
@@ -126,7 +127,7 @@ public class RecordTimestamp {
     }
 
     /**
-     * get value of record in bytes
+     * get value of record in bytes.
      *
      * @return value
      */
