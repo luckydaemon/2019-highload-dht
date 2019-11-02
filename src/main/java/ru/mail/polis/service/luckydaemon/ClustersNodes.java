@@ -47,6 +47,13 @@ public class ClustersNodes {
         return this.id;
     }
 
+    /**
+     * Get id where replicas will be
+     *
+     * @param count - how many replics
+     * @param key id
+     * @return ids of the clusters with replics.
+     */
     public String[] getReplics(final int count, @NotNull final ByteBuffer key) {
         final String[] res = new String[count];
         int index = (key.hashCode() & Integer.MAX_VALUE) % nodesList.size();

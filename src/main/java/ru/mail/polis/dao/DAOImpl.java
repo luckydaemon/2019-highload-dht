@@ -89,6 +89,11 @@ public final class DAOImpl implements DAO {
         }
     }
 
+    /**
+     * get record wuth timestamp
+     *
+     * @param key  key
+     */
     @NotNull
     public RecordTimestamp getWithTimestamp(@NotNull final ByteBuffer key) throws IOException, NoSuchElementException {
         try {
@@ -100,10 +105,16 @@ public final class DAOImpl implements DAO {
         }
     }
 
+    /**
+     * put record wuth timestamp
+     *
+     * @param key key
+     * @param value  value
+     */
     public void upsertWithTimestamp(@NotNull final ByteBuffer key,
                                     @NotNull final ByteBuffer value) throws IOException {
         try {
-            final var record = RecordTimestamp.fromValue (value, System.currentTimeMillis());
+            final var record = RecordTimestamp.fromValue(value, System.currentTimeMillis());
             final byte[] unpackedKey = ByteBufferUtils.shift(key);
             final byte[] valueByteArray = record.toBytes();
             db.put(unpackedKey, valueByteArray);
@@ -112,6 +123,11 @@ public final class DAOImpl implements DAO {
         }
     }
 
+    /**
+     * delete record wuth timestamp (put tombstone record)
+     *
+     * @param key key
+     */
     public void removeWithTimestamp(@NotNull final ByteBuffer key) throws IOException {
        try {
             final var record = RecordTimestamp.tombstone(System.currentTimeMillis());

@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.List;
+
 import static one.nio.http.Response.BAD_REQUEST;
 
 public final class Replicas {
@@ -25,7 +26,19 @@ public final class Replicas {
         return ack;
     }
 
-    public static Replicas calculateRF(final String replics, final int clusterSize, @NotNull final HttpSession session, final Replicas defaultRF) throws IOException {
+    /**
+     * Calculate the RF
+     *
+     * @param replics desired amount of replics
+     * @param session current session
+     * @param defaultRF if replics is null
+     * @param clusterSize size of cluster
+     * @return RF
+     */
+    public static Replicas calculateRF(final String replics,
+                                       final int clusterSize,
+                                       @NotNull final HttpSession session,
+                                       final Replicas defaultRF) throws IOException {
         Replicas repl = null;
         try {
             repl = replics == null ? defaultRF : Replicas.of(replics);

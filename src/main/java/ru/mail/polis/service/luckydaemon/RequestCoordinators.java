@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
-
 public class RequestCoordinators {
     @NotNull
     private final DAOImpl dao;
@@ -36,6 +35,14 @@ public class RequestCoordinators {
     private static final String PROXY_HEADER = "X-OK-Proxy: True";
     private static final String ENTITY_HEADER = "/v0/entity?id=";
 
+    /**
+     * Get id where replicas will be
+     *
+     * @param dao - dao
+     * @param nodes nodes
+     * @param clusterClients current clients of cluster
+     * @param proxied -determine if request sent by proxying or not
+     */
     public RequestCoordinators(@NotNull final DAO dao,
                                final ClustersNodes nodes,
                                final Map<String, HttpClient> clusterClients,
@@ -46,6 +53,15 @@ public class RequestCoordinators {
         this.proxied = proxied;
     }
 
+    /**
+     * controll put request
+     *
+     * @param replicaNodes - nodes where created perlicas will be placed
+     * @param request request
+     * @param acks amount of acks
+     * @param proxied -determine if request sent by proxying or not
+     * @return Response
+     */
     public Response putRequestCoordinate(final String[] replicaNodes, final Request request,
                                   final int acks, final boolean proxied) throws IOException {
         final String id = request.getParameter("id=");
@@ -54,7 +70,6 @@ public class RequestCoordinators {
         for (final String node : replicaNodes) {
             try {
                 if (node.equals(nodes.getCurrentNodeId())) {
-                    //putWithTimestampMethodWrapper(key, request);
                     dao.upsertWithTimestamp(key, ByteBuffer.wrap(request.getBody()));
                     asks++;
                 } else {
@@ -76,6 +91,15 @@ public class RequestCoordinators {
         }
     }
 
+    /**
+     * controll get request
+     *
+     * @param replicaNodes - nodes where created perlicas will be placed
+     * @param request request
+     * @param acks amount of acks
+     * @param proxied -determine if request sent by proxying or not
+     * @return Response
+     */
     public Response getRequestCoordinate(final String[] replicaNodes, final Request request,
                                   final int acks, final boolean proxied) throws IOException {
         final String id = request.getParameter("id=");
@@ -130,6 +154,15 @@ public class RequestCoordinators {
         }
     }
 
+    /**
+     * controll delete request
+     *
+     * @param replicaNodes - nodes where created perlicas will be placed
+     * @param request request
+     * @param acks amount of acks
+     * @param proxied -determine if request sent by proxying or not
+     * @return Response
+     */
     public Response deleteRequestCoordinate(final String[] replicaNodes, final Request request,
                                      final int acks, final boolean proxied) throws IOException {
         final String id = request.getParameter("id=");
@@ -138,7 +171,6 @@ public class RequestCoordinators {
         for (final String node : replicaNodes) {
             try {
                 if (node.equals(nodes.getCurrentNodeId())) {
-                    //deleteWithTimestampMethodWrapper(key);
                     dao.removeWithTimestamp(key);
                     asks++;
                 } else {
@@ -160,7 +192,15 @@ public class RequestCoordinators {
             return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
         }
     }
-
+    /**
+     * determine action according to request
+     *
+     * @param replicaClusters - nodes where created perlicas will be placed
+     * @param request request
+     * @param acks amount of acks
+     * @param session - current session
+     * @return nothing
+     */
     public void coordinateRequest(final String[] replicaClusters, final Request request,
                                   final int acks, final HttpSession session) throws IOException {
         try {
@@ -200,9 +240,4 @@ public class RequestCoordinators {
         }
         return record.toBytes();
     }
-
-
-
-
-
 }

@@ -11,6 +11,13 @@ public class RecordTimestamp {
     private final ByteBuffer value;
     private final TypeOfRecord type;
 
+    /**
+     * create record with timestamp.
+     *
+     * @param value  value
+     * @param timestamp timestamp
+     * @param type type of the record
+     */
     public RecordTimestamp(final ByteBuffer value, final long timestamp, final TypeOfRecord type) {
         this.value = value;
         this.timestamp = timestamp;
@@ -34,7 +41,7 @@ public class RecordTimestamp {
             } else if (value == DELETED.value) {
                 return DELETED;
             } else {
-                return  MISSING;
+                return MISSING;
             }
         }
     }
@@ -50,12 +57,14 @@ public class RecordTimestamp {
     public boolean isMissing(){
         return type == TypeOfRecord.MISSING;
     }
-
-
-
+    /**
+     * transform record to bytes.
+     *
+     * @return timestamp record as bytes
+     */
     public byte[] toBytes() {
         final var valSize = isValue() ? value.remaining() : 0;
-        final ByteBuffer buff =  ByteBuffer.allocate(1 + Long.BYTES + valSize);
+        final ByteBuffer buff = ByteBuffer.allocate(1 + Long.BYTES + valSize);
         buff.put(type.value);
         buff.putLong(getTimestamp());
         if (isValue()) {
@@ -64,15 +73,27 @@ public class RecordTimestamp {
         return buff.array();
     }
 
+    /**
+     * Create record from bytes.
+     *
+     * @param bytes original value
+     * @return timestamp record instance
+     */
     public static RecordTimestamp fromBytes(final byte[] bytes) {
-        if (bytes == null)
-                return new RecordTimestamp(null, -1, TypeOfRecord.MISSING);
+        if (bytes == null){
+            return new RecordTimestamp(null, -1, TypeOfRecord.MISSING);
+        }
         final ByteBuffer buffer = ByteBuffer.wrap(bytes);
         final TypeOfRecord type = TypeOfRecord.fromValue(buffer.get());
         final long timestamp = buffer.getLong();
         return new RecordTimestamp(buffer, timestamp, type);
     }
 
+    /**
+     * get value of record
+     *
+     * @return value
+     */
     public ByteBuffer getValue() {
         if (!isValue()) {
             throw new IllegalStateException("no value in record");
@@ -88,6 +109,12 @@ public class RecordTimestamp {
         return new RecordTimestamp(null, -1, TypeOfRecord.MISSING);
     }
 
+    /**
+     * Merge manyrecords into one
+     *
+     * @param responses records to merge
+     * @return latest record
+     */
     public static RecordTimestamp mergeRecords(final List<RecordTimestamp> responses) {
         if (responses.size() == 1) return responses.get(0);
         else {
@@ -98,15 +125,20 @@ public class RecordTimestamp {
         }
     }
 
+    /**
+     * get value of record in bytes
+     *
+     * @return value
+     */
     public byte[] getValueInByteFormat() {
-        final var value = getValue().duplicate();
-        final byte[] bytes = new byte[value.remaining()];
-        value.get(bytes);
+        final var tempValue = getValue().duplicate();
+        final byte[] bytes = new byte[tempValue.remaining()];
+        tempValue.get(bytes);
         return bytes;
     }
 
     public static RecordTimestamp fromValue(@NotNull final ByteBuffer value, final long timestamp) {
-        return new  RecordTimestamp(value, timestamp,TypeOfRecord.VALUE);
+        return new RecordTimestamp(value, timestamp,TypeOfRecord.VALUE);
     }
 
     public static RecordTimestamp tombstone(final long timestamp) {

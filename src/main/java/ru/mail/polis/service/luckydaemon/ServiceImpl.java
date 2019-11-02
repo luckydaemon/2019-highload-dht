@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-
 public class ServiceImpl extends HttpServer implements Service {
     private static final Log logger = LogFactory.getLog(ServiceImpl.class);
     private final DAO dao;
@@ -116,17 +115,19 @@ public class ServiceImpl extends HttpServer implements Service {
             proxied = true;
         }
         final String replicas = request.getParameter("replicas");
-        final Replicas rf = Replicas.calculateRF(replicas,  clusterSize, session, defaultRF);
+        final Replicas rf = Replicas.calculateRF(replicas, clusterSize, session, defaultRF);
         final ByteBuffer key = ByteBuffer.wrap(id.getBytes(StandardCharsets.UTF_8));
         final boolean proxiedCopy = proxied;
         if (proxied || nodes.getNodes().size() > 1) {
             final RequestCoordinators Coordinator = new RequestCoordinators(dao, nodes, clusterClients, proxiedCopy);
-            final String[] replicaClusters = proxied ? new String[]{nodes.getCurrentNodeId()} : nodes.getReplics(rf.getFrom(), key);
+            final String[] replicaClusters = proxied ? new String[]{nodes.getCurrentNodeId()} :
+                    nodes.getReplics(rf.getFrom(), key);
             Coordinator.coordinateRequest(replicaClusters, request, rf.getAck(), session);
         } else {
             executeAsyncRequest(request, key, session);
         }
     }
+    
     private void executeAsyncRequest(final Request request, final ByteBuffer key,
                                      final HttpSession session) throws IOException {
         switch (request.getMethod()) {
@@ -144,23 +145,22 @@ public class ServiceImpl extends HttpServer implements Service {
                 return;
         }
     }
-
-
+    
     private Response get(final ByteBuffer key) throws IOException {
         try {
-            final byte[] res = copyAndExtractFromByteBuffer(key);
+            final byte[] res = copyFromByteBuffer(key);
             return new Response(Response.OK, res);
         } catch (NoSuchElementException e) {
             return new Response(Response.NOT_FOUND, Response.EMPTY);
         }
     }
-    private byte[] copyAndExtractFromByteBuffer(@NotNull final ByteBuffer key) throws IOException {
+    
+    private byte[] copyFromByteBuffer(@NotNull final ByteBuffer key) throws IOException {
         final ByteBuffer dct = dao.get(key).duplicate();
         final byte[] res = new byte[dct.remaining()];
         dct.get(res);
         return res;
     }
-
 
     private Response put(final ByteBuffer key,final Request request) throws IOException {
         dao.upsert(key, ByteBuffer.wrap(request.getBody()));
