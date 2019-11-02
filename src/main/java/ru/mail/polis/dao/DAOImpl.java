@@ -1,11 +1,11 @@
 package ru.mail.polis.dao;
 
 import org.rocksdb.RocksDB;
-import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
-import org.rocksdb.BuiltinComparator;
+import org.rocksdb.RocksDBException;
 import org.rocksdb.Options;
 import org.rocksdb.CompressionType;
+import org.rocksdb.BuiltinComparator;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -86,6 +86,40 @@ public final class DAOImpl implements DAO {
         }
         catch (RocksDBException e) {
             throw new IOException("can't remove", e);
+        }
+    }
+
+    @NotNull
+    public RecordTimestamp getWithTimestamp(@NotNull final ByteBuffer key) throws IOException, NoSuchElementException {
+        try {
+            final byte[] unpackedKey = ByteBufferUtils.shift(key);
+            final byte[] valueByteArray = db.get(unpackedKey);
+            return RecordTimestamp.fromBytes(valueByteArray);
+        } catch (RocksDBException e) {
+            throw new IOException("can't get /timestamp", e);
+        }
+    }
+
+    public void upsertWithTimestamp(@NotNull final ByteBuffer key,
+                                    @NotNull final ByteBuffer value) throws IOException {
+        try {
+            final var record = RecordTimestamp.fromValue (value, System.currentTimeMillis());
+            final byte[] unpackedKey = ByteBufferUtils.shift(key);
+            final byte[] valueByteArray = record.toBytes();
+            db.put(unpackedKey, valueByteArray);
+        } catch (RocksDBException e) {
+            throw new IOException("can't upsert /timestamp", e);
+        }
+    }
+
+    public void removeWithTimestamp(@NotNull final ByteBuffer key) throws IOException {
+       try {
+            final var record = RecordTimestamp.tombstone(System.currentTimeMillis());
+            final byte[] unpackedKey = ByteBufferUtils.shift(key);
+            final byte[] valueByteArray = record.toBytes();
+            db.put(unpackedKey, valueByteArray);
+        } catch (RocksDBException e) {
+            throw new IOException("can't remove /timestamp", e);
         }
     }
 
