@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-
 public class RequestCoordinators {
     @NotNull
     private final DAOImpl dao;
@@ -114,7 +113,7 @@ public class RequestCoordinators {
         if (isProxy) {
            try {
                return processIfProxy(replicaNodes, id, responses, key);
-           } catch (IOException | HttpException | PoolException | InterruptedException e) {
+           } catch (HttpException | PoolException | InterruptedException e) {
                logger.error("error in putting", e);
 
            }
@@ -144,7 +143,7 @@ public class RequestCoordinators {
         }
     }
 
-    private Response mergedResponceIsDeletedChecker (final RecordTimestamp response) {
+    private Response mergedResponceIsDeletedChecker(final RecordTimestamp response) {
         if (response.isDeleted()) {
             return new Response(Response.NOT_FOUND, response.toBytes());
         } else {
@@ -165,12 +164,12 @@ public class RequestCoordinators {
                                             final String id,
                                             final int acks,
                                             final boolean isProxy) throws IOException {
-        final var key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
         if (isProxy) {
             dao.removeWithTimestamp(ByteBuffer.wrap(id.getBytes(Charsets.UTF_8)));
             return new Response(Response.ACCEPTED, Response.EMPTY);
         }
         int acksCounter = 0;
+        final var key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
         for (final String node : replicaNodes) {
             try {
                 if (node.equals(nodes.getCurrentNodeId())) {
@@ -246,6 +245,14 @@ public class RequestCoordinators {
         }
     }
 
+    /**
+     * Get correct response for get request if proxied
+     *
+     * @param replicaNodes - nodes
+     * @param id - id of node
+     * @param responses - list with responses to fill and merge later
+     * @param key - key of request
+     */
     public  Response processIfProxy(final String[] replicaNodes,
                                     final String id,
                                     final List<RecordTimestamp> responses,
@@ -262,12 +269,19 @@ public class RequestCoordinators {
         }
     }
 
+    /**
+     *To process each node and get response
+     *
+     * @param node - node that is used currenty
+     * @param id - id of node
+     * @param key - key of request
+     */
     public List<RecordTimestamp> processNode(final String node,
                                              final String id,
                                              final ByteBuffer key)
             throws InterruptedException, IOException, HttpException, PoolException {
         Response getResponse;
-        List<RecordTimestamp> responses = new ArrayList<>();
+        final List<RecordTimestamp> responses = new ArrayList<>();
         if (node.equals(nodes.getCurrentNodeId())) {
             getResponse = getMethodWrapper(key);
 
