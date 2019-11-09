@@ -41,7 +41,7 @@ public final class Replicas {
                                        final Replicas defaultRF) throws IOException {
         Replicas replica = null;
         try {
-            if(replics == null){
+            if(replics == null) {
                 replica = defaultRF;
             } else {
                 replica = Replicas.of(replics);

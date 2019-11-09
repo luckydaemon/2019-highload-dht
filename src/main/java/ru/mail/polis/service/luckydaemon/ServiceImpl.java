@@ -112,7 +112,7 @@ public class ServiceImpl extends HttpServer implements Service {
         }
         final Replicas rf = Replicas.calculateRF(replicas, clusterSize, session, defaultRF);
         final ByteBuffer key = ByteBuffer.wrap(id.getBytes(StandardCharsets.UTF_8));
-        if (isProxy || nodes.getNodes().size() > 1) {
+        if ( nodes.getNodes().size() > 1) {
             final RequestCoordinators Coordinator = new RequestCoordinators(dao, nodes, clusterClients, isProxy);
             final String[] replicaClusters;
             if (isProxy) {
