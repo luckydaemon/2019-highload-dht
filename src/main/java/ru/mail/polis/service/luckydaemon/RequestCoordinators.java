@@ -246,14 +246,14 @@ public class RequestCoordinators {
     }
 
     /**
-     * Get correct response for get request if proxied
+     * Get correct response for get request if proxied.
      *
      * @param replicaNodes - nodes
      * @param id - id of node
      * @param responses - list with responses to fill and merge later
      * @param key - key of request
      */
-    public  Response processIfProxy(final String[] replicaNodes,
+    public Response processIfProxy(final String[] replicaNodes,
                                     final String id,
                                     final List<RecordTimestamp> responses,
                                     final ByteBuffer key)
@@ -270,7 +270,7 @@ public class RequestCoordinators {
     }
 
     /**
-     *To process each node and get response
+     *To process each node and get response.
      *
      * @param node - node that is used currenty
      * @param id - id of node
