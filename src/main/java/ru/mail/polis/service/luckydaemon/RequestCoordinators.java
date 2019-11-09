@@ -7,10 +7,9 @@ import one.nio.http.Response;
 import one.nio.http.HttpException;
 import one.nio.pool.PoolException;
 
-import java.nio.charset.StandardCharsets;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import com.google.common.base.Charsets;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.jetbrains.annotations.NotNull;
 
 import ru.mail.polis.dao.DAO;
@@ -19,10 +18,8 @@ import ru.mail.polis.dao.RecordTimestamp;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.*;
+
 
 public class RequestCoordinators {
     @NotNull
@@ -31,9 +28,9 @@ public class RequestCoordinators {
     private final Map<String, HttpClient> clusterClients;
     private final boolean proxied;
 
-    private static final Logger logger = Logger.getLogger(RequestCoordinators.class.getName());
+    private static final Log logger = LogFactory.getLog(ServiceImpl.class);
     private static final String PROXY_HEADER = "X-OK-Proxy: True";
-    private static final String ENTITY_HEADER = "/v0/entity?id=";
+    private static final String URL = "/v0/entity?id=";
 
     /**
      * Get id where replicas will be.
@@ -41,50 +38,55 @@ public class RequestCoordinators {
      * @param dao - dao
      * @param nodes nodes
      * @param clusterClients current clients of cluster
-     * @param proxied -determine if request sent by proxying or not
+     * @param isProxy -determine if request sent by proxying or not
      */
     public RequestCoordinators(@NotNull final DAO dao,
                                final ClustersNodes nodes,
                                final Map<String, HttpClient> clusterClients,
-                               final boolean proxied) {
+                               final boolean isProxy) {
         this.dao = (DAOImpl) dao;
         this.nodes = nodes;
         this.clusterClients = clusterClients;
-        this.proxied = proxied;
+        this.proxied = isProxy;
     }
 
     /**
-     * controll put request.
+     * Control put request.
      *
      * @param replicaNodes - nodes where created perlicas will be placed
      * @param request request
      * @param acks amount of acks
-     * @param proxied -determine if request sent by proxying or not
+     * @param isProxy -determine if request sent by proxying or not
      * @return Response
      */
-    public Response putRequestCoordinate(final String[] replicaNodes, final Request request,
-                                  final int acks, final boolean proxied) throws IOException {
+    public Response putRequestCoordinate(final String[] replicaNodes,
+                                         final Request request,
+                                         final int acks,
+                                         final boolean isProxy) throws IOException {
         final String id = request.getParameter("id=");
-        final var key = ByteBuffer.wrap(id.getBytes(StandardCharsets.UTF_8));
-        int asks = 0;
+        final var key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+        if (isProxy) {
+            dao.upsertWithTimestamp(key, ByteBuffer.wrap(request.getBody()));
+            return new Response(Response.CREATED, Response.EMPTY);
+        }
+        int acksCounter = 0;
         for (final String node : replicaNodes) {
             try {
                 if (node.equals(nodes.getCurrentNodeId())) {
                     dao.upsertWithTimestamp(key, ByteBuffer.wrap(request.getBody()));
-                    asks++;
+                    acksCounter++;
                 } else {
-                    request.addHeader(PROXY_HEADER);
-                    final Response resp = clusterClients.get(node)
-                            .put(ENTITY_HEADER + id, request.getBody(), PROXY_HEADER);
-                    if (resp.getStatus() == 201) {
-                        asks++;
+                    final Response response = clusterClients.get(node)
+                            .put(URL + id, request.getBody(), PROXY_HEADER);
+                    if (response.getStatus() == 201) {
+                        acksCounter++;
                     }
                 }
-            } catch (IOException | HttpException | PoolException | InterruptedException e) {
-                logger.log(Level.SEVERE, "error in putting", e);
+            } catch (HttpException | PoolException | InterruptedException e) {
+                logger.error("error in putting", e);
             }
         }
-        if (asks >= acks || proxied) {
+        if (acksCounter >= acks) {
             return new Response(Response.CREATED, Response.EMPTY);
         } else {
             return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
@@ -92,101 +94,97 @@ public class RequestCoordinators {
     }
 
     /**
-     * controll get request.
+     * Control get request.
      *
      * @param replicaNodes - nodes where created perlicas will be placed
-     * @param request request
+     * @param id from request
      * @param acks amount of acks
-     * @param proxied -determine if request sent by proxying or not
+     * @param isProxy -determine if request sent by proxying or not
      * @return Response
      */
-    public Response getRequestCoordinate(final String[] replicaNodes, final Request request,
-                                  final int acks, final boolean proxied) throws IOException {
-        final String id = request.getParameter("id=");
-        final var key = ByteBuffer.wrap(id.getBytes(StandardCharsets.UTF_8));
-        int asks = 0;
-        final List<RecordTimestamp> responses = new ArrayList<>();
+    public Response getRequestCoordinate(final String[] replicaNodes,
+                                         final String id,
+                                         final int acks,
+                                         final boolean isProxy) throws IOException {
+        final var key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+        final List<RecordTimestamp> responses = new ArrayList<>(replicaNodes.length);
+        if (isProxy) {
+           try {
+               return processIfProxy(replicaNodes, id, responses, key);
+           } catch (IOException | HttpException | PoolException | InterruptedException e) {
+               logger.error("error in putting", e);
+
+           }
+        }
+        int acksCounter = 0;
         for (final String node : replicaNodes) {
             try {
-                Response respGet;
-                if (node.equals(nodes.getCurrentNodeId())) {
-                    respGet = getMethodWrapper(key);
-
-                } else {
-                    request.addHeader(PROXY_HEADER);
-                    respGet = clusterClients.get(node)
-                            .get(ENTITY_HEADER + id, PROXY_HEADER);
-                }
-                if (respGet.getStatus() == 404 && respGet.getBody().length == 0) {
-                    responses.add(RecordTimestamp.getEmptyRecord());
-                } else if (respGet.getStatus() == 500) {
-                    continue;
-                } else {
-                    responses.add(RecordTimestamp.fromBytes(respGet.getBody()));
-                }
-                asks++;
+                responses.addAll(processNode(node, id, key));
+                acksCounter++;
             } catch (HttpException | PoolException | InterruptedException e) {
-                logger.log(Level.SEVERE, "error in getting", e);
+                logger.error("error in getting", e);
             }
         }
-        if (asks >= acks || proxied) {
-            return responsesProcessing(replicaNodes, responses);
+        if (acksCounter >= acks) {
+            return responsesProcessing(responses);
         } else {
             return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
         }
     }
 
-    private Response responsesProcessing(final String[] replicaNodes,
-                                      final List<RecordTimestamp> responses) throws IOException {
-        final RecordTimestamp mergedResponce = RecordTimestamp.mergeRecords(responses);
-        if(mergedResponce.isValue()) {
-            if(!proxied && replicaNodes.length == 1) {
-                return new Response(Response.OK, mergedResponce.getValueInByteFormat());
-            } else if (proxied && replicaNodes.length == 1) {
-                return new Response(Response.OK, mergedResponce.toBytes());
-            } else {
-                return new Response(Response.OK, mergedResponce.getValueInByteFormat());
-            }
-        } else if (mergedResponce.isDeleted()) {
-            return new Response(Response.NOT_FOUND, mergedResponce.toBytes());
+    private Response responsesProcessing(final List<RecordTimestamp> responses) {
+        final RecordTimestamp mergedResponse = RecordTimestamp.mergeRecords(responses);
+        if(mergedResponse.isValue()) {
+                return new Response(Response.OK, mergedResponse.getValueInByteFormat());
+        } else {
+            return mergedResponceIsDeletedChecker(mergedResponse);
+        }
+    }
+
+    private Response mergedResponceIsDeletedChecker (final RecordTimestamp response) {
+        if (response.isDeleted()) {
+            return new Response(Response.NOT_FOUND, response.toBytes());
         } else {
             return new Response(Response.NOT_FOUND, Response.EMPTY);
         }
     }
-
+    
     /**
-     * controll delete request.
+     * Control delete request.
      *
      * @param replicaNodes - nodes where created perlicas will be placed
-     * @param request request
+     * @param id from request
      * @param acks amount of acks
-     * @param proxied -determine if request sent by proxying or not
+     * @param isProxy -determine if request sent by proxying or not
      * @return Response
      */
-    public Response deleteRequestCoordinate(final String[] replicaNodes, final Request request,
-                                     final int acks, final boolean proxied) throws IOException {
-        final String id = request.getParameter("id=");
+    public Response deleteRequestCoordinate(final String[] replicaNodes,
+                                            final String id,
+                                            final int acks,
+                                            final boolean isProxy) throws IOException {
         final var key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
-        int asks = 0;
+        if (isProxy) {
+            dao.removeWithTimestamp(ByteBuffer.wrap(id.getBytes(Charsets.UTF_8)));
+            return new Response(Response.ACCEPTED, Response.EMPTY);
+        }
+        int acksCounter = 0;
         for (final String node : replicaNodes) {
             try {
                 if (node.equals(nodes.getCurrentNodeId())) {
                     dao.removeWithTimestamp(key);
-                    asks++;
+                    acksCounter++;
                 } else {
-
-                    request.addHeader(PROXY_HEADER);
-                    final Response resp = clusterClients.get(node)
-                            .delete(ENTITY_HEADER + id, PROXY_HEADER);
-                    if (resp.getStatus() == 202) {
-                        asks++;
+                    final Response response = clusterClients.get(node)
+                            .delete(URL + id, PROXY_HEADER);
+                    if (response.getStatus() == 202) {
+                        acksCounter++;
                     }
                 }
-            } catch (IOException | HttpException | InterruptedException | PoolException e) {
-                logger.log(Level.SEVERE, "error in deleting ", e);
+            } catch ( HttpException | InterruptedException | PoolException e) {
+                logger.error("error in deleting", e);
             }
         }
-        if (asks >= acks || proxied) {
+        if (acksCounter >= acks) {
             return new Response(Response.ACCEPTED, Response.EMPTY);
         } else {
             return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
@@ -194,29 +192,37 @@ public class RequestCoordinators {
     }
 
     /**
-     * determine action according to request.
+     * Determine action according to request.
      *
      * @param replicaClusters - nodes where created perlicas will be placed
      * @param request request
      * @param acks amount of acks
      * @param session - current session
      */
-    public void coordinateRequest(final String[] replicaClusters, final Request request,
-                                  final int acks, final HttpSession session) throws IOException {
+    public void coordinateRequest(final String[] replicaClusters,
+                                  final Request request,
+                                  final int acks,
+                                  final HttpSession session) throws IOException {
         try {
             switch (request.getMethod()) {
-                case Request.METHOD_GET:
-                    session.sendResponse(getRequestCoordinate(replicaClusters, request, acks, proxied));
+                case Request.METHOD_GET: {
+                    final String id = request.getParameter("id=");
+                    session.sendResponse(getRequestCoordinate(replicaClusters, id, acks, proxied));
                     return;
-                case Request.METHOD_PUT:
+                    }
+                case Request.METHOD_PUT: {
                     session.sendResponse(putRequestCoordinate(replicaClusters, request, acks, proxied));
                     return;
-                case Request.METHOD_DELETE:
-                    session.sendResponse(deleteRequestCoordinate(replicaClusters, request, acks, proxied));
+                    }
+                case Request.METHOD_DELETE:{
+                    final String id = request.getParameter("id=");
+                    session.sendResponse(deleteRequestCoordinate(replicaClusters, id, acks, proxied));
                     return;
-                default:
+                    }
+                default:{
                     session.sendError(Response.METHOD_NOT_ALLOWED, "not supported method");
                     return;
+                    }
             }
         } catch (IOException e) {
             session.sendError(Response.GATEWAY_TIMEOUT, e.getMessage());
@@ -226,18 +232,53 @@ public class RequestCoordinators {
     @NotNull
     private Response getMethodWrapper(final ByteBuffer key) throws IOException {
         try {
-            final byte[] res = copyFromByteBuffer(key);
-            return new Response(Response.OK, res);
+            final RecordTimestamp record = dao.getWithTimestamp(key);
+            if(record.isMissing()){
+                throw new NoSuchElementException("no element");
+            }
+            final byte[] response = record.toBytes();
+            return new Response(Response.OK, response);
         } catch (NoSuchElementException exp) {
             return new Response(Response.NOT_FOUND, Response.EMPTY);
         }
     }
 
-    private byte[] copyFromByteBuffer(@NotNull final ByteBuffer key) throws IOException {
-        final RecordTimestamp record = dao.getWithTimestamp(key);
-        if(record.isMissing()){
-            throw new NoSuchElementException("no element");
+    public  Response processIfProxy(final String[] replicaNodes,
+                                    final String id,
+                                    final List<RecordTimestamp> responses,
+                                    final ByteBuffer key)
+            throws InterruptedException, IOException, HttpException, PoolException {
+        for (final String node : replicaNodes) {
+            responses.addAll(processNode(node, id, key));
         }
-        return record.toBytes();
+        final RecordTimestamp mergedResponse = RecordTimestamp.mergeRecords(responses);
+        if (mergedResponse.isValue()) {
+            return new Response(Response.OK, mergedResponse.getValue().array());
+        } else {
+            return mergedResponceIsDeletedChecker(mergedResponse);
+        }
+    }
+
+    public List<RecordTimestamp> processNode(final String node,
+                                             final String id,
+                                             final ByteBuffer key)
+            throws InterruptedException, IOException, HttpException, PoolException {
+        Response getResponse;
+        List<RecordTimestamp> responses = new ArrayList<>();
+        if (node.equals(nodes.getCurrentNodeId())) {
+            getResponse = getMethodWrapper(key);
+
+        } else {
+            getResponse = clusterClients.get(node)
+                    .get(URL + id, PROXY_HEADER);
+        }
+        if (getResponse.getStatus() == 404 && getResponse.getBody().length == 0) {
+            responses.add(RecordTimestamp.getEmptyRecord());
+        } else if (getResponse.getStatus() == 500) {
+            return responses;
+        } else {
+            responses.add(RecordTimestamp.fromBytes(getResponse.getBody()));
+        }
+        return responses;
     }
 }

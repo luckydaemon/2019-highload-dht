@@ -3,14 +3,8 @@ package ru.mail.polis.service.luckydaemon;
 import com.google.common.base.Charsets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import one.nio.http.HttpServer;
-import one.nio.http.HttpServerConfig;
-import one.nio.http.HttpSession;
-import one.nio.http.Path;
-import one.nio.http.Request;
-import one.nio.http.Response;
+import one.nio.http.*;
 import one.nio.net.Socket;
-import one.nio.http.HttpClient;
 import one.nio.net.ConnectionString;
 import one.nio.server.AcceptorConfig;
 
@@ -43,7 +37,7 @@ public class ServiceImpl extends HttpServer implements Service {
 
 
     /**
-     * constructor.
+     * Constructor.
      *
      * @param config server config
      * @param dao  dao
@@ -65,7 +59,7 @@ public class ServiceImpl extends HttpServer implements Service {
     }
 
     /**
-     * method to set parameters and create an object.
+     * Method to set parameters and create an object.
      *
      * @param port -port
      * @param dao  dao
@@ -94,12 +88,14 @@ public class ServiceImpl extends HttpServer implements Service {
     }
 
     /**
-     * access to entity.
+     * Access to entity.
      *
      * @param id   id
      * @param request  request
      */
-    public void entity(final String id,
+    @Path("/v0/entity")
+    public void entity( @Param("id") final String id,
+                        @Param("replicas") final String replicas,
                        @NotNull final Request request,
                        final HttpSession session) throws IOException {
         if (request.getURI().equals("/v0/entity")) {
@@ -110,18 +106,20 @@ public class ServiceImpl extends HttpServer implements Service {
             session.sendResponse(new Response(Response.BAD_REQUEST, Response.EMPTY));
             return;
         }
-        boolean proxied = false;
+        boolean isProxy = false;
         if (request.getHeader(PROXY_HEADER) != null) {
-            proxied = true;
+            isProxy = true;
         }
-        final String replicas = request.getParameter("replicas");
         final Replicas rf = Replicas.calculateRF(replicas, clusterSize, session, defaultRF);
         final ByteBuffer key = ByteBuffer.wrap(id.getBytes(StandardCharsets.UTF_8));
-        final boolean proxiedCopy = proxied;
-        if (proxied || nodes.getNodes().size() > 1) {
-            final RequestCoordinators Coordinator = new RequestCoordinators(dao, nodes, clusterClients, proxiedCopy);
-            final String[] replicaClusters = proxied ? new String[]{nodes.getCurrentNodeId()} :
-                    nodes.getReplics(rf.getFrom(), key);
+        if (isProxy || nodes.getNodes().size() > 1) {
+            final RequestCoordinators Coordinator = new RequestCoordinators(dao, nodes, clusterClients, isProxy);
+            final String[] replicaClusters;
+            if (isProxy) {
+                replicaClusters = new String[]{nodes.getCurrentNodeId()};
+            } else {
+                replicaClusters = nodes.getReplics(rf.getFrom(), key);
+            }
             Coordinator.coordinateRequest(replicaClusters, request, rf.getAck(), session);
         } else {
             executeAsyncRequest(request, key, session);
@@ -174,20 +172,7 @@ public class ServiceImpl extends HttpServer implements Service {
 
     @Override
     public void handleDefault(final Request request, final HttpSession session) throws IOException {
-        switch(request.getPath()) {
-            case "/v0/entity":
-                final String id = request.getParameter("id=");
-                entity(id,request, session);
-                break;
-            case "/v0/entities":
-                final String start = request.getParameter("start=");
-                final String end = request.getParameter("end=");
-                entities(start, end, session);
-                break;
-            default:
                 session.sendError(Response.BAD_REQUEST, "wrong path");
-                break;
-        }
     }
 
     private void responseSend(@NotNull final Resp response, @NotNull final HttpSession session){
@@ -198,21 +183,22 @@ public class ServiceImpl extends HttpServer implements Service {
                 try {
                     session.sendError(Response.INTERNAL_ERROR, null);
                 } catch (IOException ex) {
-                    logger.error(e);
+                    logger.error(ex);
                 }
             }
         });
     }
 
     /**
-     * access to entities.
+     * Access to entities.
      *
      * @param  start first key
      * @param end  last key
      * @param session session
      */
-    public void entities(final String start,
-                         final String end,
+    @Path("/v0/entities")
+    public void entities(@Param("start") final String start,
+                         @Param("end") final String end,
                          @NotNull final HttpSession session) throws IOException {
         if (start == null || start.isEmpty()) {
             session.sendError(Response.BAD_REQUEST, "no start");

@@ -91,7 +91,7 @@ public class RecordTimestamp {
     }
 
     /**
-     * get value of record.
+     * Get value of record.
      *
      * @return value
      */
@@ -111,7 +111,7 @@ public class RecordTimestamp {
     }
 
     /**
-     * Merge manyrecords into one.
+     * Merge many records into one.
      *
      * @param responses records to merge
      * @return latest record

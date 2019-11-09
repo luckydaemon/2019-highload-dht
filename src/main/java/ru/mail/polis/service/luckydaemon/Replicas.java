@@ -39,17 +39,21 @@ public final class Replicas {
                                        final int clusterSize,
                                        @NotNull final HttpSession session,
                                        final Replicas defaultRF) throws IOException {
-        Replicas repl = null;
+        Replicas replica = null;
         try {
-            repl = replics == null ? defaultRF : Replicas.of(replics);
-            if (repl.ack < 1 || repl.from < repl.ack || repl.from > clusterSize) {
+            if(replics == null){
+                replica = defaultRF;
+            } else {
+                replica = Replicas.of(replics);
+            }
+            if (replica.ack < 1 || replica.from < replica.ack || replica.from > clusterSize) {
                 throw new IllegalArgumentException("too big  from");
             }
-            return repl;
+            return replica;
         } catch (IllegalArgumentException e) {
             session.sendError(BAD_REQUEST, "wrong replica");
         }
-        return repl;
+        return replica;
     }
 
     @NotNull
