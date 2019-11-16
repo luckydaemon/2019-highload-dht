@@ -188,7 +188,7 @@ public class ServiceImpl extends HttpServer implements Service {
                 session.sendResponse(response.response());
             } catch (IOException e) {
                 try {
-                    session.sendError(Response.INTERNAL_ERROR, null);
+                    session.sendError(Response.INTERNAL_ERROR, "error while sending async response");
                 } catch (IOException ex) {
                     logger.error(ex);
                 }

@@ -47,7 +47,7 @@ public final class Replicas {
                 replica = Replicas.of(replics);
             }
             if (replica.ack < 1 || replica.from < replica.ack || replica.from > clusterSize) {
-                throw new IllegalArgumentException("too big  from");
+                throw new IllegalArgumentException("invalid value of rf");
             }
             return replica;
         } catch (IllegalArgumentException e) {

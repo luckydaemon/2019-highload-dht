@@ -80,7 +80,8 @@ public class RequestCoordinators {
                 } else {
                     final Response response = clusterClients.get(node)
                             .put(URL + id, request.getBody(), PROXY_HEADER);
-                    if (response.getStatus() == 201) {
+                    final Response responseToCheck = new Response(Response.CREATED);
+                    if (response.getStatus() == responseToCheck.getStatus()) {
                         acksCounter++;
                     }
                 }
@@ -91,7 +92,8 @@ public class RequestCoordinators {
         if (acksCounter >= acks) {
             return new Response(Response.CREATED, Response.EMPTY);
         } else {
-            return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
+            final String error = "not enough replicas";
+            return new Response(Response.GATEWAY_TIMEOUT, error.getBytes(Charsets.UTF_8));
         }
     }
 
@@ -178,7 +180,8 @@ public class RequestCoordinators {
                 } else {
                     final Response response = clusterClients.get(node)
                             .delete(URL + id, PROXY_HEADER);
-                    if (response.getStatus() == 202) {
+                    final Response responseToCheck = new Response(Response.ACCEPTED);
+                    if (response.getStatus() == responseToCheck.getStatus()) {
                         acksCounter++;
                     }
                 }
@@ -210,20 +213,20 @@ public class RequestCoordinators {
                 case Request.METHOD_GET: {
                     final String id = request.getParameter("id=");
                     session.sendResponse(getRequestCoordinate(replicaClusters, id, acks, proxied));
-                    return;
+                    break;
                     }
                 case Request.METHOD_PUT: {
                     session.sendResponse(putRequestCoordinate(replicaClusters, request, acks, proxied));
-                    return;
+                    break;
                     }
                 case Request.METHOD_DELETE:{
                     final String id = request.getParameter("id=");
                     session.sendResponse(deleteRequestCoordinate(replicaClusters, id, acks, proxied));
-                    return;
+                    break;
                     }
                 default:{
                     session.sendError(Response.METHOD_NOT_ALLOWED, "not supported method");
-                    return;
+                    break;
                     }
             }
         } catch (IOException e) {
