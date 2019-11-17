@@ -25,13 +25,11 @@ import ru.mail.polis.dao.RecordTimestamp;
 
 public class RequestCoordinators {
     private final DAOImpl dao;
-    private final ClustersNodes nodes;
+    private final ClustersNodes clustersNodes;
     private final Map<String, HttpClient> ClusterClients;
     private final Replicas defaultRF;
     private static final int NOT_FOUND = new Response(Response.NOT_FOUND).getStatus();
     private static final int INTERNAL_ERROR = new Response(Response.INTERNAL_ERROR).getStatus();
-    private static final int ACCEPTED = new Response(Response.ACCEPTED).getStatus();
-    private static final int CREATED = new Response(Response.CREATED).getStatus();
 
     private static final Log logger = LogFactory.getLog(RequestCoordinators.class);
 
@@ -40,7 +38,7 @@ public class RequestCoordinators {
                                final Map<String, HttpClient> ClusterClients,
                                final Replicas defaultRF) {
         this.dao = (DAOImpl) dao;
-        this.nodes = nodes;
+        this.clustersNodes = nodes;
         this.ClusterClients =  ClusterClients;
         this.defaultRF =  defaultRF;
     }
@@ -74,20 +72,20 @@ public class RequestCoordinators {
     private  Response get(final boolean proxied, final Replicas rf, final String id) throws IOException {
         final String[] nodes;
         if (proxied) {
-            nodes= new String[]{this.nodes.getCurrentNodeId()} ;
+            nodes= new String[]{this.clustersNodes.getCurrentNodeId()} ;
         } else {
-            nodes =  this.nodes.getReplics(rf.getFrom(), ByteBuffer.wrap(id.getBytes(Charsets.UTF_8)));
+            nodes =  this.clustersNodes.getReplics(rf.getFrom(), ByteBuffer.wrap(id.getBytes(Charsets.UTF_8)));
         }
         final List<CompletableFuture<RecordTimestamp>> futures = new ArrayList<>();
         final List<RecordTimestamp> responses = new ArrayList<>();
         for (final String node : nodes) {
             final CompletableFuture<RecordTimestamp> future;
-            if (this.nodes.isMe(node)) {
+            if (this.clustersNodes.isMe(node)) {
                 final ByteBuffer byteBuffer = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
                 future = CompletableFuture.supplyAsync(() -> daoGetWrapper(dao, byteBuffer));
             } else {
                 future = ClusterClients.get(node)
-                        .sendAsync(HtttRequestBuilder.getHttpRequest(node, id), HttpResponse.BodyHandlers.ofByteArray())
+                        .sendAsync(HtttRequestBuilder.createGetHttpRequest(node, id), HttpResponse.BodyHandlers.ofByteArray())
                         .thenApply(response -> {
                             if (response.statusCode() == NOT_FOUND && response.body().length == 0) {
                                 return RecordTimestamp.getEmptyRecord();
@@ -117,17 +115,20 @@ public class RequestCoordinators {
         }
 
         final List<CompletableFuture<String>> futures = new ArrayList<>();
-        final String[] nodes = this.nodes.getReplics(defaultRF.getFrom(), wrap);
+        final String[] nodes = this.clustersNodes.getReplics(defaultRF.getFrom(), wrap);
         for (final String node : nodes) {
             final CompletableFuture<String> future;
-            if (this.nodes.isMe(node)) {
+            if (this.clustersNodes.isMe(node)) {
                 future = CompletableFuture
                         .runAsync(() -> daoRemoveWrapper(dao, wrap))
-                        .handle((aVoid, throwable) -> daoRemoveFutureHandler(throwable));
+                        .handle((aVoid, throwable) ->
+                                DaoMethodsHandlers.daoRemoveFutureHandler(throwable));
             } else {
                 future = ClusterClients.get(node)
-                        .sendAsync(HtttRequestBuilder.getDeleteHttpRequest(node, id), HttpResponse.BodyHandlers.discarding())
-                        .handle((response, throwable) -> daoRemoveFutureHandlerWithResponse(response));
+                        .sendAsync(HtttRequestBuilder.createDeleteHttpRequest(node, id),
+                                   HttpResponse.BodyHandlers.discarding())
+                        .handle((response, throwable) ->
+                                DaoMethodsHandlers.daoRemoveFutureHandlerWithResponse(response));
             }
             futures.add(future);
 
@@ -151,18 +152,20 @@ public class RequestCoordinators {
         }
 
         final List<CompletableFuture<String>> futures = new ArrayList<>();
-        final String[] nodes = this.nodes.getReplics(defaultRF.getFrom(), wrap);
+        final String[] nodes = this.clustersNodes.getReplics(defaultRF.getFrom(), wrap);
         for (final String node : nodes) {
             final CompletableFuture<String> future;
-            if (this.nodes.isMe(node)) {
+            if (this.clustersNodes.isMe(node)) {
                 future = CompletableFuture
                         .runAsync(() -> daoUpsertWrapper(dao, wrap, value))
-                        .handle((aVoid, throwable) -> daoUpsertFuturehandler(throwable));
+                        .handle((aVoid, throwable) ->
+                                DaoMethodsHandlers.daoUpsertFuturehandler(throwable));
             } else {
                 future = ClusterClients.get(node)
-                        .sendAsync(HtttRequestBuilder.getUpsertHttpRequest(node, id, value),
+                        .sendAsync(HtttRequestBuilder.createPutHttpRequest(node, id, value),
                                 HttpResponse.BodyHandlers.discarding())
-                        .handle((response, throwable) -> daoUpsertFuturehandlerWithResponse(response));
+                        .handle((response, throwable) ->
+                                DaoMethodsHandlers.daoUpsertFuturehandlerWithResponse(response));
             }
             futures.add(future);
         }
@@ -262,32 +265,5 @@ public class RequestCoordinators {
             }
         }
         return acks;
-    }
-    private String daoRemoveFutureHandler(final Throwable throwable) {
-        if (throwable != null) {
-            return Response.INTERNAL_ERROR;
-        }
-        return Response.ACCEPTED;
-    }
-
-    private String daoRemoveFutureHandlerWithResponse(final HttpResponse<Void> response) {
-        if (response.statusCode() == ACCEPTED) {
-            return Response.ACCEPTED;
-        }
-        return Response.INTERNAL_ERROR;
-    }
-
-    private String daoUpsertFuturehandler(final Throwable throwable) {
-        if (throwable != null) {
-            return Response.INTERNAL_ERROR;
-        }
-        return Response.CREATED;
-    }
-
-    private String daoUpsertFuturehandlerWithResponse(final HttpResponse<Void> response) {
-        if (response.statusCode() == CREATED) {
-            return Response.CREATED;
-        }
-        return Response.INTERNAL_ERROR;
     }
 }

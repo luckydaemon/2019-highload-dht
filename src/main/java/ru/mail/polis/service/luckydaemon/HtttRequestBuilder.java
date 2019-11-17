@@ -12,19 +12,18 @@ public class HtttRequestBuilder {
     private static final String PROXY_HEADER = "PROXY_HEADER";
     private static final String URL = "/v0/entity?id=";
 
-    public static HttpRequest getUpsertHttpRequest(final String node, final String id, final byte[] value) {
-        final HttpRequest request = requestTemplate(node,id).PUT(HttpRequest.BodyPublishers.ofByteArray(value)).build();
-        return request;
+    private  HtttRequestBuilder(){}
+
+    public static HttpRequest createPutHttpRequest(final String node, final String id, final byte[] value) {
+        return requestTemplate(node,id).PUT(HttpRequest.BodyPublishers.ofByteArray(value)).build();
     }
 
-    public static HttpRequest getDeleteHttpRequest(final String node, final String id) {
-        final HttpRequest request = requestTemplate(node,id).DELETE().build();
-        return request;
+    public static HttpRequest createDeleteHttpRequest(final String node, final String id) {
+        return requestTemplate(node,id).DELETE().build();
     }
 
-    public static HttpRequest getHttpRequest(final String node, final String id) {
-        final HttpRequest request = requestTemplate(node,id).GET().build();
-        return request;
+    public static HttpRequest createGetHttpRequest(final String node, final String id) {
+        return requestTemplate(node,id).GET().build();
     }
 
    private static HttpRequest.Builder requestTemplate(final String node, final String id) {
