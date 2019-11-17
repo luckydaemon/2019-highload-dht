@@ -57,7 +57,7 @@ public final class Replicas {
     }
 
     @NotNull
-    private static Replicas of(@NotNull final String value) {
+    public static Replicas of(@NotNull final String value) {
         final String rem = value.replace("=", "");
         final List<String> values = Splitter.on('/').splitToList(rem);
         if (values.size() != 2) {

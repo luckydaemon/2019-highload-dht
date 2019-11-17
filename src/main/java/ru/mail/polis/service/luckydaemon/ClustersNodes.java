@@ -47,6 +47,10 @@ public class ClustersNodes {
         return this.id;
     }
 
+    public boolean isMe(@NotNull final String node) {
+        return id.equals(node);
+    }
+
     /**
      * Get id where replicas will be.
      *
@@ -62,5 +66,16 @@ public class ClustersNodes {
             index = (index + 1) % nodesList.size();
         }
         return res;
+    }
+
+
+    public Set<Integer> getPorts() {
+        final Set<String> res = getNodes();
+        final Set<Integer> ret = new HashSet<>();
+        for (String it : res) {
+            it = it.replaceAll("\\D+","");
+            ret.add(Integer.parseInt(it));
+        }
+        return ret;
     }
 }

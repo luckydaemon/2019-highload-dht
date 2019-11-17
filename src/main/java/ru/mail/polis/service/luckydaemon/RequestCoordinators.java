@@ -1,95 +1,173 @@
 package ru.mail.polis.service.luckydaemon;
 
-import one.nio.http.HttpClient;
 import one.nio.http.Request;
 import one.nio.http.HttpSession;
 import one.nio.http.Response;
-import one.nio.http.HttpException;
-import one.nio.pool.PoolException;
 
 import com.google.common.base.Charsets;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.concurrent.CompletableFuture;
+import java.net.http.HttpClient;
+import java.net.http.HttpResponse;
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
+
 import ru.mail.polis.dao.DAO;
 import ru.mail.polis.dao.DAOImpl;
 import ru.mail.polis.dao.RecordTimestamp;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.List;
-import java.util.NoSuchElementException;
-
 public class RequestCoordinators {
-    @NotNull
     private final DAOImpl dao;
     private final ClustersNodes nodes;
-    private final Map<String, HttpClient> clusterClients;
-    private final boolean proxied;
+    private final Map<String, HttpClient> ClusterClients;
+    private final Replicas defaultRF;
+    private static final int NOT_FOUND = new Response(Response.NOT_FOUND).getStatus();
+    private static final int INTERNAL_ERROR = new Response(Response.INTERNAL_ERROR).getStatus();
+    private static final int ACCEPTED = new Response(Response.ACCEPTED).getStatus();
+    private static final int CREATED = new Response(Response.CREATED).getStatus();
 
-    private static final Log logger = LogFactory.getLog(ServiceImpl.class);
-    private static final String PROXY_HEADER = "X-OK-Proxy: True";
-    private static final String URL = "/v0/entity?id=";
+    private static final Log logger = LogFactory.getLog(RequestCoordinators.class);
 
-    /**
-     * Get id where replicas will be.
-     *
-     * @param dao - dao
-     * @param nodes nodes
-     * @param clusterClients current clients of cluster
-     * @param isProxy -determine if request sent by proxying or not
-     */
-    public RequestCoordinators(@NotNull final DAO dao,
+    public RequestCoordinators(final DAO dao,
                                final ClustersNodes nodes,
-                               final Map<String, HttpClient> clusterClients,
-                               final boolean isProxy) {
+                               final Map<String, HttpClient> ClusterClients,
+                               final Replicas defaultRF) {
         this.dao = (DAOImpl) dao;
         this.nodes = nodes;
-        this.clusterClients = clusterClients;
-        this.proxied = isProxy;
+        this.ClusterClients =  ClusterClients;
+        this.defaultRF =  defaultRF;
     }
 
-    /**
-     * Control put request.
-     *
-     * @param replicaNodes - nodes where created perlicas will be placed
-     * @param request request
-     * @param acks amount of acks
-     * @param isProxy -determine if request sent by proxying or not
-     * @return Response
-     */
-    public Response putRequestCoordinate(final String[] replicaNodes,
-                                         final Request request,
-                                         final int acks,
-                                         final boolean isProxy) throws IOException {
-        final String id = request.getParameter("id=");
-        final var key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
-        if (isProxy) {
-            dao.upsertWithTimestamp(key, ByteBuffer.wrap(request.getBody()));
-            return new Response(Response.CREATED, Response.EMPTY);
+    public  void coordinateRequest(final boolean proxied,
+                                  final Request request,
+                                  final Replicas rf,
+                                  final String id,
+                                  final HttpSession session) throws IOException {
+        try {
+            switch (request.getMethod()) {
+                case Request.METHOD_GET:
+                    session.sendResponse(get(proxied, rf, id));
+                    break;
+                case Request.METHOD_PUT:
+                    session.sendResponse(upsert(proxied, request.getBody(), rf.getAck(), id));
+                    break;
+                case Request.METHOD_DELETE:
+                    session.sendResponse(delete(proxied, rf.getAck(), id));
+                    break;
+                default:
+                    session.sendError(Response.METHOD_NOT_ALLOWED, "wrong method /requestCoordinator");
+                    break;
+            }
+        } catch (IOException e) {
+            session.sendError(Response.GATEWAY_TIMEOUT, e.getMessage());
         }
-        int acksCounter = 0;
-        for (final String node : replicaNodes) {
+    }
+
+
+    private  Response get(final boolean proxied, final Replicas rf, final String id) throws IOException {
+        final String[] nodes;
+        if (proxied) {
+            nodes= new String[]{this.nodes.getCurrentNodeId()} ;
+        } else {
+            nodes =  this.nodes.getReplics(rf.getFrom(), ByteBuffer.wrap(id.getBytes(Charsets.UTF_8)));
+        }
+        final List<CompletableFuture<RecordTimestamp>> futures = new ArrayList<>();
+        final List<RecordTimestamp> responses = new ArrayList<>();
+        for (final String node : nodes) {
+            final CompletableFuture<RecordTimestamp> future;
+            if (this.nodes.isMe(node)) {
+                final ByteBuffer byteBuffer = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+                future = CompletableFuture.supplyAsync(() -> daoGetWrapper(dao, byteBuffer));
+            } else {
+                future = ClusterClients.get(node)
+                        .sendAsync(HtttRequestBuilder.getHttpRequest(node, id), HttpResponse.BodyHandlers.ofByteArray())
+                        .thenApply(response -> {
+                            if (response.statusCode() == NOT_FOUND && response.body().length == 0) {
+                                return RecordTimestamp.getEmptyRecord();
+                            } else if (response.statusCode() != INTERNAL_ERROR) {
+                                return RecordTimestamp.fromBytes(response.body());
+                            }
+                            return RecordTimestamp.getEmptyRecord();
+                        });
+            }
+            futures.add(future);
+        }
+
+        final int countAcks = countAckForGetMthod(futures, responses);
+        return processResponcessFromGetRequest(proxied, rf, nodes, countAcks, responses);
+    }
+
+
+    private Response delete(final boolean proxied, final int ack, final String id) {
+        final ByteBuffer wrap = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+        if (proxied) {
             try {
-                if (node.equals(nodes.getCurrentNodeId())) {
-                    dao.upsertWithTimestamp(key, ByteBuffer.wrap(request.getBody()));
-                    acksCounter++;
-                } else {
-                    final Response response = clusterClients.get(node)
-                            .put(URL + id, request.getBody(), PROXY_HEADER);
-                    final Response responseToCheck = new Response(Response.CREATED);
-                    if (response.getStatus() == responseToCheck.getStatus()) {
-                        acksCounter++;
-                    }
-                }
-            } catch (HttpException | PoolException | InterruptedException e) {
-                logger.error("error in putting", e);
+                dao.removeWithTimestamp(wrap);
+                return new Response(Response.ACCEPTED, Response.EMPTY);
+            } catch (IOException e) {
+                return new Response(Response.INTERNAL_ERROR, e.toString().getBytes(Charsets.UTF_8));
             }
         }
-        if (acksCounter >= acks) {
+
+        final List<CompletableFuture<String>> futures = new ArrayList<>();
+        final String[] nodes = this.nodes.getReplics(defaultRF.getFrom(), wrap);
+        for (final String node : nodes) {
+            final CompletableFuture<String> future;
+            if (this.nodes.isMe(node)) {
+                future = CompletableFuture
+                        .runAsync(() -> daoRemoveWrapper(dao, wrap))
+                        .handle((aVoid, throwable) -> daoRemoveFutureHandler(throwable));
+            } else {
+                future = ClusterClients.get(node)
+                        .sendAsync(HtttRequestBuilder.getDeleteHttpRequest(node, id), HttpResponse.BodyHandlers.discarding())
+                        .handle((response, throwable) -> daoRemoveFutureHandlerWithResponse(response));
+            }
+            futures.add(future);
+
+            final int countAcks = countAcks(futures,Response.ACCEPTED);
+            if (countAcks >= ack) {
+                return new Response(Response.ACCEPTED, Response.EMPTY);
+            }
+        }
+        return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
+    }
+
+    private Response upsert(final boolean proxied, final byte[] value, final int ack, final String id) {
+        final ByteBuffer wrap = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+        if (proxied) {
+            try {
+                dao.upsertWithTimestamp(wrap, ByteBuffer.wrap(value));
+                return new Response(Response.CREATED, Response.EMPTY);
+            } catch (IOException e) {
+                return new Response(Response.INTERNAL_ERROR, e.toString().getBytes(Charsets.UTF_8));
+            }
+        }
+
+        final List<CompletableFuture<String>> futures = new ArrayList<>();
+        final String[] nodes = this.nodes.getReplics(defaultRF.getFrom(), wrap);
+        for (final String node : nodes) {
+            final CompletableFuture<String> future;
+            if (this.nodes.isMe(node)) {
+                future = CompletableFuture
+                        .runAsync(() -> daoUpsertWrapper(dao, wrap, value))
+                        .handle((aVoid, throwable) -> daoUpsertFuturehandler(throwable));
+            } else {
+                future = ClusterClients.get(node)
+                        .sendAsync(HtttRequestBuilder.getUpsertHttpRequest(node, id, value),
+                                HttpResponse.BodyHandlers.discarding())
+                        .handle((response, throwable) -> daoUpsertFuturehandlerWithResponse(response));
+            }
+            futures.add(future);
+        }
+        final int countAcks = countAcks(futures,Response.CREATED);
+        if (countAcks >= ack) {
             return new Response(Response.CREATED, Response.EMPTY);
         } else {
             final String error = "not enough replicas";
@@ -97,208 +175,119 @@ public class RequestCoordinators {
         }
     }
 
-    /**
-     * Control get request.
-     *
-     * @param replicaNodes - nodes where created perlicas will be placed
-     * @param id from request
-     * @param acks amount of acks
-     * @param isProxy -determine if request sent by proxying or not
-     * @return Response
-     */
-    public Response getRequestCoordinate(final String[] replicaNodes,
-                                         final String id,
-                                         final int acks,
-                                         final boolean isProxy) throws IOException {
-        final var key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
-        final List<RecordTimestamp> responses = new ArrayList<>(replicaNodes.length);
-        if (isProxy) {
-           try {
-               return processIfProxy(replicaNodes, id, responses, key);
-           } catch (HttpException | PoolException | InterruptedException e) {
-               logger.error("error in putting", e);
-
-           }
-        }
-        int acksCounter = 0;
-        for (final String node : replicaNodes) {
-            try {
-                responses.addAll(processNode(node, id, key));
-                acksCounter++;
-            } catch (HttpException | PoolException | InterruptedException e) {
-                logger.error("error in getting", e);
+    private Response processResponcessFromGetRequest(final boolean proxied,
+                                                     final Replicas rf,
+                                                     final String[] nodes,
+                                                     final int acks,
+                                                     final List< RecordTimestamp> responses) {
+        if (acks >= rf.getAck() || proxied) {
+            final RecordTimestamp mergeResponse =  RecordTimestamp.mergeRecords(responses);
+            if (mergeResponse.isValue()) {
+                return getResponse(proxied, nodes, mergeResponse);
             }
-        }
-        if (acksCounter >= acks) {
-            return responsesProcessing(responses);
-        } else {
-            return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
-        }
-    }
-
-    private Response responsesProcessing(final List<RecordTimestamp> responses) {
-        final RecordTimestamp mergedResponse = RecordTimestamp.mergeRecords(responses);
-        if(mergedResponse.isValue()) {
-                return new Response(Response.OK, mergedResponse.getValueInByteFormat());
-        } else {
-            return mergedResponceIsDeletedChecker(mergedResponse);
-        }
-    }
-
-    private Response mergedResponceIsDeletedChecker(final RecordTimestamp response) {
-        if (response.isDeleted()) {
-            return new Response(Response.NOT_FOUND, response.toBytes());
-        } else {
+            if (mergeResponse.isDeleted()) {
+                return new Response(Response.NOT_FOUND, mergeResponse.toBytes());
+            }
             return new Response(Response.NOT_FOUND, Response.EMPTY);
         }
-    }
-    
-    /**
-     * Control delete request.
-     *
-     * @param replicaNodes - nodes where created perlicas will be placed
-     * @param id from request
-     * @param acks amount of acks
-     * @param isProxy -determine if request sent by proxying or not
-     * @return Response
-     */
-    public Response deleteRequestCoordinate(final String[] replicaNodes,
-                                            final String id,
-                                            final int acks,
-                                            final boolean isProxy) throws IOException {
-        if (isProxy) {
-            dao.removeWithTimestamp(ByteBuffer.wrap(id.getBytes(Charsets.UTF_8)));
-            return new Response(Response.ACCEPTED, Response.EMPTY);
-        }
-        int acksCounter = 0;
-        final var key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
-        for (final String node : replicaNodes) {
-            try {
-                if (node.equals(nodes.getCurrentNodeId())) {
-                    dao.removeWithTimestamp(key);
-                    acksCounter++;
-                } else {
-                    final Response response = clusterClients.get(node)
-                            .delete(URL + id, PROXY_HEADER);
-                    final Response responseToCheck = new Response(Response.ACCEPTED);
-                    if (response.getStatus() == responseToCheck.getStatus()) {
-                        acksCounter++;
-                    }
-                }
-            } catch ( HttpException | InterruptedException | PoolException e) {
-                logger.error("error in deleting", e);
-            }
-        }
-        if (acksCounter >= acks) {
-            return new Response(Response.ACCEPTED, Response.EMPTY);
-        } else {
-            return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
-        }
-    }
-
-    /**
-     * Determine action according to request.
-     *
-     * @param replicaClusters - nodes where created perlicas will be placed
-     * @param request request
-     * @param acks amount of acks
-     * @param session - current session
-     */
-    public void coordinateRequest(final String[] replicaClusters,
-                                  final Request request,
-                                  final int acks,
-                                  final HttpSession session) throws IOException {
-        try {
-            switch (request.getMethod()) {
-                case Request.METHOD_GET: {
-                    final String id = request.getParameter("id=");
-                    session.sendResponse(getRequestCoordinate(replicaClusters, id, acks, proxied));
-                    break;
-                    }
-                case Request.METHOD_PUT: {
-                    session.sendResponse(putRequestCoordinate(replicaClusters, request, acks, proxied));
-                    break;
-                    }
-                case Request.METHOD_DELETE:{
-                    final String id = request.getParameter("id=");
-                    session.sendResponse(deleteRequestCoordinate(replicaClusters, id, acks, proxied));
-                    break;
-                    }
-                default:{
-                    session.sendError(Response.METHOD_NOT_ALLOWED, "not supported method");
-                    break;
-                    }
-            }
-        } catch (IOException e) {
-            session.sendError(Response.GATEWAY_TIMEOUT, e.getMessage());
-        }
+        return new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY);
     }
 
     @NotNull
-    private Response getMethodWrapper(final ByteBuffer key) throws IOException {
+    private Response getResponse(final boolean proxied,
+                                        final String[] nodes,
+                                        final  RecordTimestamp mergeResponse) {
+        if (proxied) {
+            return new Response(Response.OK, mergeResponse.toBytes());
+        }
+        if (nodes.length == 1) {
+            return new Response(Response.OK, mergeResponse.getValueInByteFormat());
+        }
+        return new Response(Response.OK, mergeResponse.getValueInByteFormat());
+    }
+
+
+
+    private RecordTimestamp daoGetWrapper(final DAOImpl dao, final ByteBuffer byteBuffer) {
         try {
-            final RecordTimestamp record = dao.getWithTimestamp(key);
-            if(record.isMissing()){
-                throw new NoSuchElementException("no element");
+            return dao.getWithTimestamp(byteBuffer);
+        } catch (IOException e) {
+            logger.error(e);
+        }
+        return null;
+    }
+
+    private void daoUpsertWrapper(final DAOImpl dao, final ByteBuffer wrap, final byte[] value) {
+        try {
+            dao.upsertWithTimestamp(wrap, ByteBuffer.wrap(value));
+        } catch (IOException e) {
+            logger.error(e);
+        }
+    }
+    private void daoRemoveWrapper(final DAOImpl dao, final ByteBuffer wrap) {
+        try {
+            dao.removeWithTimestamp(wrap);
+        } catch (IOException e) {
+            logger.error(e);
+        }
+    }
+
+    private int countAcks(final List<CompletableFuture<String>> completableFutures,
+                          final String response) {
+        int acks = 0;
+        for (final CompletableFuture<String> future : completableFutures) {
+            try {
+                if (future.get().equals(response)) {
+                    acks++;
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                logger.error(e);
             }
-            final byte[] response = record.toBytes();
-            return new Response(Response.OK, response);
-        } catch (NoSuchElementException exp) {
-            return new Response(Response.NOT_FOUND, Response.EMPTY);
         }
+        return acks;
     }
 
-    /**
-     * Get correct response for get request if proxied.
-     *
-     * @param replicaNodes - nodes
-     * @param id - id of node
-     * @param responses - list with responses to fill and merge later
-     * @param key - key of request
-     */
-    public Response processIfProxy(final String[] replicaNodes,
-                                    final String id,
-                                    final List<RecordTimestamp> responses,
-                                    final ByteBuffer key)
-            throws InterruptedException, IOException, HttpException, PoolException {
-        for (final String node : replicaNodes) {
-            responses.addAll(processNode(node, id, key));
+    private int countAckForGetMthod(final List<CompletableFuture<RecordTimestamp>> completableFutures,
+                            final List<RecordTimestamp> responses) {
+        int acks = 0;
+        for (final CompletableFuture<RecordTimestamp> future : completableFutures) {
+            try {
+                final RecordTimestamp timestamp = future.get();
+                if (timestamp != null) {
+                    responses.add(timestamp);
+                    acks++;
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                logger.error(e);
+            }
         }
-        final RecordTimestamp mergedResponse = RecordTimestamp.mergeRecords(responses);
-        if (mergedResponse.isValue()) {
-            return new Response(Response.OK, mergedResponse.getValue().array());
-        } else {
-            return mergedResponceIsDeletedChecker(mergedResponse);
+        return acks;
+    }
+    private String daoRemoveFutureHandler(final Throwable throwable) {
+        if (throwable != null) {
+            return Response.INTERNAL_ERROR;
         }
+        return Response.ACCEPTED;
     }
 
-    /**
-     *To process each node and get response.
-     *
-     * @param node - node that is used currenty
-     * @param id - id of node
-     * @param key - key of request
-     */
-    public List<RecordTimestamp> processNode(final String node,
-                                             final String id,
-                                             final ByteBuffer key)
-            throws InterruptedException, IOException, HttpException, PoolException {
-        Response getResponse;
-        final List<RecordTimestamp> responses = new ArrayList<>();
-        if (node.equals(nodes.getCurrentNodeId())) {
-            getResponse = getMethodWrapper(key);
+    private String daoRemoveFutureHandlerWithResponse(final HttpResponse<Void> response) {
+        if (response.statusCode() == ACCEPTED) {
+            return Response.ACCEPTED;
+        }
+        return Response.INTERNAL_ERROR;
+    }
 
-        } else {
-            getResponse = clusterClients.get(node)
-                    .get(URL + id, PROXY_HEADER);
+    private String daoUpsertFuturehandler(final Throwable throwable) {
+        if (throwable != null) {
+            return Response.INTERNAL_ERROR;
         }
-        if (getResponse.getStatus() == 404 && getResponse.getBody().length == 0) {
-            responses.add(RecordTimestamp.getEmptyRecord());
-        } else if (getResponse.getStatus() == 500) {
-            return responses;
-        } else {
-            responses.add(RecordTimestamp.fromBytes(getResponse.getBody()));
+        return Response.CREATED;
+    }
+
+    private String daoUpsertFuturehandlerWithResponse(final HttpResponse<Void> response) {
+        if (response.statusCode() == CREATED) {
+            return Response.CREATED;
         }
-        return responses;
+        return Response.INTERNAL_ERROR;
     }
 }

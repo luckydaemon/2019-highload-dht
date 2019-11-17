@@ -1,47 +1,46 @@
 package ru.mail.polis.service.luckydaemon;
 
 import com.google.common.base.Charsets;
+
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import one.nio.http.Response;
 import one.nio.http.HttpServer;
-import one.nio.http.HttpClient;
-import one.nio.http.HttpSession;
 import one.nio.http.HttpServerConfig;
-import one.nio.http.Path;
-import one.nio.http.Param;
+import one.nio.http.HttpSession;
+import one.nio.http.Response;
 import one.nio.http.Request;
 import one.nio.net.Socket;
-import one.nio.net.ConnectionString;
-import one.nio.server.AcceptorConfig;
+import one.nio.http.Path;
+import one.nio.http.Param;
 
+import one.nio.server.AcceptorConfig;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.jetbrains.annotations.NotNull;
 
 import ru.mail.polis.dao.DAO;
+import ru.mail.polis.dao.DAOImpl;
 import ru.mail.polis.service.Service;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
+
+import java.net.http.HttpClient;
 import java.util.concurrent.Executors;
 
 public class ServiceImpl extends HttpServer implements Service {
-    private static final Log logger = LogFactory.getLog(ServiceImpl.class);
-    private final DAO dao;
+    private final DAOImpl dao;
     private final Executor exec;
-    private final ClustersNodes nodes;
-    private final Map<String, HttpClient> clusterClients;
-    private final int clusterSize;
+    private final int size;
     private final Replicas defaultRF;
-    private static final String PROXY_HEADER = "X-OK-Proxy: True";
+    private final RequestCoordinators coord;
+    private static final String PROXY_HEADER = "PROXY_HEADER";
 
+    private static final Log logger = LogFactory.getLog(ServiceImpl.class);
 
     /**
      * Constructor.
@@ -49,22 +48,22 @@ public class ServiceImpl extends HttpServer implements Service {
      * @param config server config
      * @param dao  dao
      * @param nodes  nodes in use
-     * @param clusterClients map of client and nodes
+     * @param ClusterClients map of client and nodes
      */
-    public ServiceImpl(@NotNull final HttpServerConfig config,
-                       @NotNull final DAO dao,
-                       @NotNull final ClustersNodes nodes,
-                       @NotNull final Map<String, HttpClient> clusterClients) throws IOException {
+    public ServiceImpl(
+            @NotNull final HttpServerConfig config,
+            final DAO dao,
+            final ClustersNodes nodes,
+            final Map<String, HttpClient> ClusterClients
+    ) throws IOException {
         super(config);
-        this.dao = dao;
+        this.dao = (DAOImpl) dao;
         this.exec = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(),
                 new ThreadFactoryBuilder().setNameFormat("exec-%d").build());
-        this.nodes = nodes;
-        this.clusterClients = clusterClients;
-        this.clusterSize = nodes.getNodes().size();
-        this.defaultRF = new Replicas(nodes.getNodes().size() / 2 + 1, nodes.getNodes().size());
+        this.size = nodes.getNodes().size();
+        this.defaultRF = new Replicas(nodes.getNodes().size() / 2 + 1, size);
+        this.coord = new RequestCoordinators(dao, nodes, ClusterClients,defaultRF);
     }
-
     /**
      * Method to set parameters and create an object.
      *
@@ -72,7 +71,8 @@ public class ServiceImpl extends HttpServer implements Service {
      * @param dao  dao
      * @param nodes  nodes
      */
-    public static Service create(final int port, @NotNull final DAO dao,
+    public static Service create(final int port,
+                                 @NotNull final DAO dao,
                                  @NotNull final ClustersNodes nodes) throws IOException {
         final var acceptor = new AcceptorConfig();
         final var config = new HttpServerConfig();
@@ -80,13 +80,15 @@ public class ServiceImpl extends HttpServer implements Service {
         config.acceptors = new AcceptorConfig[]{acceptor};
         config.maxWorkers = Runtime.getRuntime().availableProcessors();
         config.queueTime = 10;
-        final Map<String, HttpClient> clusterClients = new HashMap<>();
-        for (final String st : nodes.getNodes()) {
-            if (!nodes.getCurrentNodeId().equals(st) && !clusterClients.containsKey(st)) {
-                clusterClients.put(st, new HttpClient(new ConnectionString(st + "?timeout=100")));
+        final Map<String, HttpClient> ClusterClients = new HashMap<>();
+        for (final String node : nodes.getNodes()) {
+            if (nodes.isMe(node)) {
+                continue;
             }
+            assert !ClusterClients.containsKey(node);
+            ClusterClients.put(node, HttpClient.newBuilder().build());
         }
-        return new ServiceImpl(config, dao, nodes, clusterClients);
+        return new ServiceImpl( config,  dao, nodes, ClusterClients);
     }
 
     @Path("/v0/status")
@@ -94,17 +96,16 @@ public class ServiceImpl extends HttpServer implements Service {
         return Response.ok("OK");
     }
 
-    /**
-     * Access to entity.
-     *
-     * @param id   id
-     * @param request  request
-     */
+    @Override
+    public HttpSession createSession(final Socket socket) {
+        return new StreamSession( this, socket);
+    }
+
     @Path("/v0/entity")
     public void entity( @Param("id") final String id,
                         @Param("replicas") final String replicas,
-                       @NotNull final Request request,
-                       final HttpSession session) throws IOException {
+                        @NotNull final Request request,
+                        final HttpSession session) throws IOException {
         if (request.getURI().equals("/v0/entity")) {
             session.sendError(Response.BAD_REQUEST, "no parameters");
             return;
@@ -113,27 +114,30 @@ public class ServiceImpl extends HttpServer implements Service {
             session.sendResponse(new Response(Response.BAD_REQUEST, Response.EMPTY));
             return;
         }
-        boolean isProxy = false;
-        if (request.getHeader(PROXY_HEADER) != null) {
-            isProxy = true;
+        boolean proxied = true;
+        if (request.getHeader(PROXY_HEADER) == null) {
+            proxied = false;
         }
-        final Replicas rf = Replicas.calculateRF(replicas, clusterSize, session, defaultRF);
-        final ByteBuffer key = ByteBuffer.wrap(id.getBytes(StandardCharsets.UTF_8));
-        if ( nodes.getNodes().size() > 1) {
-            final RequestCoordinators Coordinator = new RequestCoordinators(dao, nodes, clusterClients, isProxy);
-            final String[] replicaClusters;
-            if (isProxy) {
-                replicaClusters = new String[]{nodes.getCurrentNodeId()};
-            } else {
-                replicaClusters = nodes.getReplics(rf.getFrom(), key);
-            }
-            Coordinator.coordinateRequest(replicaClusters, request, rf.getAck(), session);
+        final Replicas rf;
+        if (replicas == null) {
+            rf =defaultRF;
         } else {
-            executeAsyncRequest(request, key, session);
+            rf = Replicas.of(replicas);
         }
+        if (rf.getAck() < 1 || rf.getFrom() < rf.getAck() || rf.getFrom() > size) {
+            session.sendError(Response.BAD_REQUEST, "invalid value of rf /serviceimpl");
+        }
+
+        if (proxied || size > 1) {
+                coord.coordinateRequest(proxied, request, rf, id, session);
+        } else {
+            final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+            executeAsyncRequest(request, key, session);
+            }
     }
-    
-    private void executeAsyncRequest(final Request request, final ByteBuffer key,
+
+    private void executeAsyncRequest(final Request request,
+                                     final ByteBuffer key,
                                      final HttpSession session) throws IOException {
         switch (request.getMethod()) {
             case Request.METHOD_GET:
@@ -150,7 +154,7 @@ public class ServiceImpl extends HttpServer implements Service {
                 return;
         }
     }
-    
+
     private Response get(final ByteBuffer key) throws IOException {
         try {
             final byte[] res = copyFromByteBuffer(key);
@@ -159,7 +163,7 @@ public class ServiceImpl extends HttpServer implements Service {
             return new Response(Response.NOT_FOUND, Response.EMPTY);
         }
     }
-    
+
     private byte[] copyFromByteBuffer(@NotNull final ByteBuffer key) throws IOException {
         final ByteBuffer dct = dao.get(key).duplicate();
         final byte[] res = new byte[dct.remaining()];
@@ -175,11 +179,6 @@ public class ServiceImpl extends HttpServer implements Service {
     private Response delete(final ByteBuffer key) throws IOException {
         dao.remove(key);
         return new Response(Response.ACCEPTED, Response.EMPTY);
-    }
-
-    @Override
-    public void handleDefault(final Request request, final HttpSession session) throws IOException {
-                session.sendError(Response.BAD_REQUEST, "wrong path");
     }
 
     private void responseSend(@NotNull final Resp response, @NotNull final HttpSession session){
@@ -234,13 +233,12 @@ public class ServiceImpl extends HttpServer implements Service {
     }
 
     @Override
-    public HttpSession createSession(final Socket socket){
-        return new StreamSession(this, socket);
+    public void handleDefault(final Request request, final HttpSession session) throws IOException {
+        session.sendError(Response.BAD_REQUEST, "wrong path");
     }
 
     @FunctionalInterface
     interface Resp {
         Response response() throws IOException;
     }
-
 }
