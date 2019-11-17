@@ -4,7 +4,7 @@ import one.nio.http.Response;
 
 import java.net.http.HttpResponse;
 
-public class DaoMethodsHandlers {
+public final class DaoMethodsHandlers {
     private static final int ACCEPTED = new Response(Response.ACCEPTED).getStatus();
     private static final int CREATED = new Response(Response.CREATED).getStatus();
 

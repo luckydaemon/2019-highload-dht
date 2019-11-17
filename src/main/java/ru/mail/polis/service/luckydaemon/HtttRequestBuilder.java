@@ -8,7 +8,7 @@ import static java.time.temporal.ChronoUnit.SECONDS;
 
 
 
-public class HtttRequestBuilder {
+public final class HtttRequestBuilder {
     private static final String PROXY_HEADER = "PROXY_HEADER";
     private static final String URL = "/v0/entity?id=";
 
