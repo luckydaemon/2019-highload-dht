@@ -67,15 +67,4 @@ public class ClustersNodes {
         }
         return res;
     }
-
-
-    public Set<Integer> getPorts() {
-        final Set<String> res = getNodes();
-        final Set<Integer> ret = new HashSet<>();
-        for (String it : res) {
-            it = it.replaceAll("\\D+","");
-            ret.add(Integer.parseInt(it));
-        }
-        return ret;
-    }
 }

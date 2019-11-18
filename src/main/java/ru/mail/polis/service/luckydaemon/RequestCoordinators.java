@@ -68,7 +68,6 @@ public class RequestCoordinators {
         }
     }
 
-
     private  Response get(final boolean proxied, final Replicas rf, final String id) throws IOException {
         final String[] nodes;
         if (proxied) {
@@ -101,7 +100,6 @@ public class RequestCoordinators {
         final int countAcks = countAckForGetMthod(futures, responses);
         return processResponcessFromGetRequest(proxied, rf, nodes, countAcks, responses);
     }
-
 
     private Response delete(final boolean proxied, final int ack, final String id) {
         final ByteBuffer wrap = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
@@ -208,8 +206,6 @@ public class RequestCoordinators {
         }
         return new Response(Response.OK, mergeResponse.getValueInByteFormat());
     }
-
-
 
     private RecordTimestamp daoGetWrapper(final DAOImpl dao, final ByteBuffer byteBuffer) {
         try {
