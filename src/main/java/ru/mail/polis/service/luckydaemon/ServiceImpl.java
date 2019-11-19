@@ -111,10 +111,10 @@ public class ServiceImpl extends HttpServer implements Service {
      * @param session - http session
      */
     @Path("/v0/entity")
-    public void entity( @Param("id") final String id,
-                        @Param("replicas") final String replicas,
-                        @NotNull final Request request,
-                        final HttpSession session) throws IOException {
+    public void entity(@Param("id") final String id,
+                       @Param("replicas") final String replicas,
+                       @NotNull final Request request,
+                       final HttpSession session) throws IOException {
         if (request.getURI().equals("/v0/entity")) {
             session.sendError(Response.BAD_REQUEST, "no parameters");
             return;

@@ -57,7 +57,7 @@ public final class Replicas {
     }
 
     /**
-     * Get correct rf instead of default
+     * Get correct rf instead of default.
      * @param value - value of rf
      */
     @NotNull

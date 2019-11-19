@@ -173,7 +173,7 @@ public class RequestCoordinators {
             if (this.clustersNodes.isMe(node)) {
                 future = CompletableFuture
                         .runAsync(() -> daoUpsertWrapper(dao, wrap, value))
-                        .handle((aVoid, throwable) ->
+                        .handle((avoid, throwable) ->
                                 DaoMethodsHandlers.daoUpsertFuturehandler(throwable));
             } else {
                 future = clusterClients.get(node)
@@ -214,7 +214,7 @@ public class RequestCoordinators {
     @NotNull
     private Response getResponse(final boolean proxied,
                                         final String[] nodes,
-                                        final  RecordTimestamp mergeResponse) {
+                                        final RecordTimestamp mergeResponse) {
         if (proxied) {
             return new Response(Response.OK, mergeResponse.toBytes());
         }

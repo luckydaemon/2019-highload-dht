@@ -12,7 +12,7 @@ public final class DaoMethodsHandlers {
     }
 
     /**
-     * Error handler in delete method
+     * Error handler in delete method.
      *
      * @param throwable - error object
      * @return response
@@ -25,7 +25,7 @@ public final class DaoMethodsHandlers {
     }
 
     /**
-     * Response wrapper in delete method
+     * Response wrapper in delete method.
      *
      * @param response - java.net http response
      * @return one.nio http response
@@ -38,7 +38,7 @@ public final class DaoMethodsHandlers {
     }
 
     /**
-     * Error handler in upsert method
+     * Error handler in upsert method.
      *
      * @param throwable - error object
      * @return response
@@ -51,7 +51,7 @@ public final class DaoMethodsHandlers {
     }
 
     /**
-     * Response wrapper in upsert method
+     * Response wrapper in upsert method.
      *
      * @param response - java.net http response
      * @return one.nio http response
