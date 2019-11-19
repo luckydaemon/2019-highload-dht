@@ -48,13 +48,13 @@ public class ServiceImpl extends HttpServer implements Service {
      * @param config server config
      * @param dao  dao
      * @param nodes  nodes in use
-     * @param ClusterClients map of client and nodes
+     * @param clusterClients map of client and nodes
      */
     public ServiceImpl(
             @NotNull final HttpServerConfig config,
             final DAO dao,
             final ClustersNodes nodes,
-            final Map<String, HttpClient> ClusterClients
+            final Map<String, HttpClient> clusterClients
     ) throws IOException {
         super(config);
         this.dao = (DAOImpl) dao;
@@ -62,8 +62,9 @@ public class ServiceImpl extends HttpServer implements Service {
                 new ThreadFactoryBuilder().setNameFormat("exec-%d").build());
         this.size = nodes.getNodes().size();
         this.defaultRF = new Replicas(nodes.getNodes().size() / 2 + 1, size);
-        this.coord = new RequestCoordinators(dao, nodes, ClusterClients,defaultRF);
+        this.coord = new RequestCoordinators(dao, nodes, clusterClients,defaultRF);
     }
+
     /**
      * Method to set parameters and create an object.
      *
@@ -88,7 +89,7 @@ public class ServiceImpl extends HttpServer implements Service {
             assert !ClusterClients.containsKey(node);
             ClusterClients.put(node, HttpClient.newBuilder().build());
         }
-        return new ServiceImpl( config,  dao, nodes, ClusterClients);
+        return new ServiceImpl(config, dao, nodes, ClusterClients);
     }
 
     @Path("/v0/status")
@@ -98,9 +99,17 @@ public class ServiceImpl extends HttpServer implements Service {
 
     @Override
     public HttpSession createSession(final Socket socket) {
-        return new StreamSession( this, socket);
+        return new StreamSession(this, socket);
     }
 
+    /**
+     * Access to entity.
+     *
+     * @param id   id
+     * @param replicas replicas
+     * @param request  request
+     * @param session - http session
+     */
     @Path("/v0/entity")
     public void entity( @Param("id") final String id,
                         @Param("replicas") final String replicas,
@@ -120,7 +129,7 @@ public class ServiceImpl extends HttpServer implements Service {
         }
         final Replicas rf;
         if (replicas == null) {
-            rf =defaultRF;
+            rf = defaultRF;
         } else {
             rf = Replicas.of(replicas);
         }
@@ -181,7 +190,7 @@ public class ServiceImpl extends HttpServer implements Service {
         return new Response(Response.ACCEPTED, Response.EMPTY);
     }
 
-    private void responseSend(@NotNull final Resp response, @NotNull final HttpSession session){
+    private void responseSend(@NotNull final Resp response, @NotNull final HttpSession session) {
         exec.execute(() -> {
             try {
                 session.sendResponse(response.response());

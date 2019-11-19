@@ -41,7 +41,7 @@ public final class Replicas {
                                        final Replicas defaultRF) throws IOException {
         Replicas replica = null;
         try {
-            if(replics == null) {
+            if (replics == null) {
                 replica = defaultRF;
             } else {
                 replica = Replicas.of(replics);
@@ -56,6 +56,10 @@ public final class Replicas {
         return replica;
     }
 
+    /**
+     * Get correct rf instead of default
+     * @param value - value of rf
+     */
     @NotNull
     public static Replicas of(@NotNull final String value) {
         final String rem = value.replace("=", "");

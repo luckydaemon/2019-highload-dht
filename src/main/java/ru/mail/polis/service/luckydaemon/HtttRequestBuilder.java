@@ -6,13 +6,12 @@ import java.time.Duration;
 
 import static java.time.temporal.ChronoUnit.SECONDS;
 
-
-
 public final class HtttRequestBuilder {
     private static final String PROXY_HEADER = "PROXY_HEADER";
     private static final String URL = "/v0/entity?id=";
 
-    private  HtttRequestBuilder(){}
+    private  HtttRequestBuilder(){
+    }
 
     public static HttpRequest createPutHttpRequest(final String node, final String id, final byte[] value) {
         return requestTemplate(node,id).PUT(HttpRequest.BodyPublishers.ofByteArray(value)).build();

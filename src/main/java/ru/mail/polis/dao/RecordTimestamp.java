@@ -46,15 +46,15 @@ public class RecordTimestamp {
         }
     }
 
-    public boolean isValue(){
+    public boolean isValue() {
         return type == TypeOfRecord.VALUE;
     }
 
-    public boolean isDeleted(){
+    public boolean isDeleted() {
         return type == TypeOfRecord.DELETED;
     }
 
-    public boolean isMissing(){
+    public boolean isMissing() {
         return type == TypeOfRecord.MISSING;
     }
 
@@ -81,7 +81,7 @@ public class RecordTimestamp {
      * @return timestamp record instance
      */
     public static RecordTimestamp fromBytes(final byte[] bytes) {
-        if (bytes == null){
+        if (bytes == null) {
             return new RecordTimestamp(null, -1, TypeOfRecord.MISSING);
         }
         final ByteBuffer buffer = ByteBuffer.wrap(bytes);
@@ -143,6 +143,6 @@ public class RecordTimestamp {
     }
 
     public static RecordTimestamp tombstone(final long timestamp) {
-        return new RecordTimestamp( null,timestamp, TypeOfRecord.DELETED);
+        return new RecordTimestamp(null,timestamp, TypeOfRecord.DELETED);
     }
 }

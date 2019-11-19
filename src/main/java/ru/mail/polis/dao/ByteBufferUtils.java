@@ -7,7 +7,9 @@ import java.util.Arrays;
 
 public final class ByteBufferUtils {
 
-    private ByteBufferUtils(){}
+    private ByteBufferUtils(){
+
+    }
 
     /**
      * reverse shift bytes.

@@ -26,24 +26,40 @@ import ru.mail.polis.dao.RecordTimestamp;
 public class RequestCoordinators {
     private final DAOImpl dao;
     private final ClustersNodes clustersNodes;
-    private final Map<String, HttpClient> ClusterClients;
+    private final Map<String, HttpClient> clusterClients;
     private final Replicas defaultRF;
     private static final int NOT_FOUND = new Response(Response.NOT_FOUND).getStatus();
     private static final int INTERNAL_ERROR = new Response(Response.INTERNAL_ERROR).getStatus();
 
     private static final Log logger = LogFactory.getLog(RequestCoordinators.class);
 
+    /**
+     * Constructor.
+     *
+     * @param dao  dao
+     * @param nodes  nodes in use
+     * @param clusterClients map of client and nodes
+     * @param defaultRF standard variant of rf
+     */
     public RequestCoordinators(final DAO dao,
                                final ClustersNodes nodes,
-                               final Map<String, HttpClient> ClusterClients,
+                               final Map<String, HttpClient> clusterClients,
                                final Replicas defaultRF) {
         this.dao = (DAOImpl) dao;
         this.clustersNodes = nodes;
-        this.ClusterClients =  ClusterClients;
-        this.defaultRF =  defaultRF;
+        this.clusterClients = clusterClients;
+        this.defaultRF = defaultRF;
     }
 
-    public  void coordinateRequest(final boolean proxied,
+    /**
+     * Method for choosing next action based on request type.
+     *@param proxied -determine if request sent by proxying or not
+     * @param request - request itself
+     * @param rf - rf
+     * @param id - request id
+     * @param session -session
+     */
+    public void coordinateRequest(final boolean proxied,
                                   final Request request,
                                   final Replicas rf,
                                   final String id,
@@ -68,12 +84,12 @@ public class RequestCoordinators {
         }
     }
 
-    private  Response get(final boolean proxied, final Replicas rf, final String id) throws IOException {
+    private Response get(final boolean proxied, final Replicas rf, final String id) throws IOException {
         final String[] nodes;
         if (proxied) {
-            nodes= new String[]{this.clustersNodes.getCurrentNodeId()} ;
+            nodes = new String[]{this.clustersNodes.getCurrentNodeId()};
         } else {
-            nodes =  this.clustersNodes.getReplics(rf.getFrom(), ByteBuffer.wrap(id.getBytes(Charsets.UTF_8)));
+            nodes = this.clustersNodes.getReplics(rf.getFrom(), ByteBuffer.wrap(id.getBytes(Charsets.UTF_8)));
         }
         final List<CompletableFuture<RecordTimestamp>> futures = new ArrayList<>();
         final List<RecordTimestamp> responses = new ArrayList<>();
@@ -83,8 +99,9 @@ public class RequestCoordinators {
                 final ByteBuffer byteBuffer = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
                 future = CompletableFuture.supplyAsync(() -> daoGetWrapper(dao, byteBuffer));
             } else {
-                future = ClusterClients.get(node)
-                        .sendAsync(HtttRequestBuilder.createGetHttpRequest(node, id), HttpResponse.BodyHandlers.ofByteArray())
+                future = clusterClients.get(node)
+                        .sendAsync(HtttRequestBuilder.createGetHttpRequest(node, id),
+                                   HttpResponse.BodyHandlers.ofByteArray())
                         .thenApply(response -> {
                             if (response.statusCode() == NOT_FOUND && response.body().length == 0) {
                                 return RecordTimestamp.getEmptyRecord();
@@ -119,10 +136,10 @@ public class RequestCoordinators {
             if (this.clustersNodes.isMe(node)) {
                 future = CompletableFuture
                         .runAsync(() -> daoRemoveWrapper(dao, wrap))
-                        .handle((aVoid, throwable) ->
+                        .handle((avoid, throwable) ->
                                 DaoMethodsHandlers.daoRemoveFutureHandler(throwable));
             } else {
-                future = ClusterClients.get(node)
+                future = clusterClients.get(node)
                         .sendAsync(HtttRequestBuilder.createDeleteHttpRequest(node, id),
                                    HttpResponse.BodyHandlers.discarding())
                         .handle((response, throwable) ->
@@ -159,7 +176,7 @@ public class RequestCoordinators {
                         .handle((aVoid, throwable) ->
                                 DaoMethodsHandlers.daoUpsertFuturehandler(throwable));
             } else {
-                future = ClusterClients.get(node)
+                future = clusterClients.get(node)
                         .sendAsync(HtttRequestBuilder.createPutHttpRequest(node, id, value),
                                 HttpResponse.BodyHandlers.discarding())
                         .handle((response, throwable) ->
@@ -180,9 +197,9 @@ public class RequestCoordinators {
                                                      final Replicas rf,
                                                      final String[] nodes,
                                                      final int acks,
-                                                     final List< RecordTimestamp> responses) {
+                                                     final List<RecordTimestamp> responses) {
         if (acks >= rf.getAck() || proxied) {
-            final RecordTimestamp mergeResponse =  RecordTimestamp.mergeRecords(responses);
+            final RecordTimestamp mergeResponse = RecordTimestamp.mergeRecords(responses);
             if (mergeResponse.isValue()) {
                 return getResponse(proxied, nodes, mergeResponse);
             }
@@ -223,6 +240,7 @@ public class RequestCoordinators {
             logger.error(e);
         }
     }
+
     private void daoRemoveWrapper(final DAOImpl dao, final ByteBuffer wrap) {
         try {
             dao.removeWithTimestamp(wrap);

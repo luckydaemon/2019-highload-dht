@@ -21,7 +21,7 @@ public class StreamSession extends HttpSession {
     private static final byte[] EMPTY = "0\r\n\r\n".getBytes(Charsets.UTF_8);
     private Iterator<Record> iter;
 
-    StreamSession(final HttpServer httpserver, final Socket socket){
+    StreamSession(final HttpServer httpserver, final Socket socket) {
         super(socket, httpserver);
     }
 
@@ -31,7 +31,7 @@ public class StreamSession extends HttpSession {
      * @param iter data iterator
      * @throws IOException if something wrong
      */
-    public void streamStart(final Iterator<Record> iter) throws IOException{
+    public void streamStart(final Iterator<Record> iter) throws IOException {
         this.iter = iter;
         if (handling == null) {
             throw new IOException("no handling");
@@ -83,7 +83,7 @@ public class StreamSession extends HttpSession {
                 : "Keep-Alive".equalsIgnoreCase(connection);
     }
 
-    private byte[] formAChunk(final Record record){
+    private byte[] formAChunk(final Record record) {
         final byte[] key = ByteBufferUtils.fromByteToArray(record.getKey());
         final byte[] value = ByteBufferUtils.fromByteToArray(record.getValue());
         final int payloadLength = key.length + value.length + DELIMITER.length;
