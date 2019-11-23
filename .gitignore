@@ -16,7 +16,7 @@
 !results/*
 !*.txt
 !*.svg
-!task7/analys.md
+!results/task7/analys.md
 
 # ...even if they are in subdirectories
 !*/
