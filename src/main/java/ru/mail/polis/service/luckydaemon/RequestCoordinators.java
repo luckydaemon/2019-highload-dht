@@ -230,7 +230,7 @@ public class RequestCoordinators {
         } catch (IOException e) {
             logger.error(e);
         }
-        return null;
+        return RecordTimestamp.getEmptyRecord();
     }
 
     private void daoUpsertWrapper(final DAOImpl dao, final ByteBuffer wrap, final byte[] value) {

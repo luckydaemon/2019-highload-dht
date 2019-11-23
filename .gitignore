@@ -16,6 +16,7 @@
 !results/*
 !*.txt
 !*.svg
+!.yaml
 
 # ...even if they are in subdirectories
 !*/
