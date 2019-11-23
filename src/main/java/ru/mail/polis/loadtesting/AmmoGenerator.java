@@ -10,17 +10,17 @@ import java.io.Writer;
 import java.io.FileOutputStream;
 import java.util.Random;
 
-public final class ammo_generator {
+public final class AmmoGenerator {
     private static final int LENGTH = 256;
     private static final String CRLF = "\r\n";
     private static final String URL = "/v0/entity?id=";
     private static Random random = new Random();
 
-    private ammo_generator() {
+    private AmmoGenerator() {
     }
 
-    private static void createPutRequest(final long keyLong, final OutputStream outputStream ) throws IOException {
-        final String key =  String.valueOf(keyLong);
+    private static void createPutRequest(final long keyLong, final OutputStream outputStream) throws IOException {
+        final String key = String.valueOf(keyLong);
         final byte[] value = new byte[LENGTH];
         random.nextBytes(value);
         final ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
@@ -36,8 +36,8 @@ public final class ammo_generator {
             outputStream.write(CRLF.getBytes(Charsets.UTF_8));
     }
 
-    private static void createGetRequest(final long keyLong, final OutputStream outputStream  ) throws IOException {
-        final String key =  String.valueOf(keyLong);
+    private static void createGetRequest(final long keyLong, final OutputStream outputStream) throws IOException {
+        final String key = String.valueOf(keyLong);
         final ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
         try (Writer requestWriter = new OutputStreamWriter(byteStream, Charsets.UTF_8)) {
             requestWriter.write("GET " + URL + key + " HTTP/1.1" + CRLF);
@@ -50,38 +50,59 @@ public final class ammo_generator {
     }
 
     private static void putUnique(final long amount) throws IOException {
-        OutputStream outputStream = new FileOutputStream("put");
+        final OutputStream outputStream = new FileOutputStream("put");
             for (long i = 1; i < amount; i++) {
                 createPutRequest(i, outputStream);
             }
+        outputStream.close();
     }
 
+    /**
+     * Create put requests with 10% overwrite.
+     *
+     * @param amount - needed amount of request
+     * @throws IOException
+     */
    public static void put10Overwrite(final long amount) throws IOException {
-        int nextKey = 0;
-        OutputStream outputStream = new FileOutputStream("put_10");
+       int nextKey = 0;
+       final OutputStream outputStream = new FileOutputStream("put_10");
             for (long i = 0; i < amount; i++) {
                 final boolean isOverwrite = random.nextInt(10) == 0;
                 if (isOverwrite) {
-                    long key = random.nextInt(nextKey);
+                    final long key = random.nextInt(nextKey);
                     createPutRequest(key, outputStream);
                 } else {
                     createPutRequest(nextKey, outputStream);
                     nextKey++;
                 }
             }
+       outputStream.close();
     }
 
-    public  static void get(final int amount) throws IOException {
-        OutputStream outputStream = new FileOutputStream("get");
+    /**
+     * Create get request.
+     *
+     * @param amount - needed amount of request
+     * @throws IOException
+     */
+    public static void get(final int amount) throws IOException {
+        final OutputStream outputStream = new FileOutputStream("get");
             for (int i = 0; i < amount; i++) {
                 final int key = random.nextInt(amount);
                 createGetRequest(key, outputStream);
             }
+        outputStream.close();
     }
 
-    public  static void getNew(final long amount) throws IOException {
+    /**
+     * Create get request with offset.
+     *
+     * @param amount - needed amount of request
+     * @throws IOException
+     */
+    public static void getNew(final long amount) throws IOException {
         long key = 0;
-        OutputStream outputStream = new FileOutputStream("getNew");
+        final OutputStream outputStream = new FileOutputStream("getNew");
             for (long i = 0; i < amount; i++) {
                 boolean isDone = false;
                 while (!isDone) {
@@ -97,11 +118,18 @@ public final class ammo_generator {
                 }
                 createGetRequest(key, outputStream);
             }
+        outputStream.close();
     }
 
-    public  static void mixed(final long amount) throws IOException {
+    /**
+     * Create mixed requests.
+     *
+     * @param amount - needed amount of request
+     * @throws IOException
+     */
+    public static void mixed(final long amount) throws IOException {
         int getKey = 1;
-        OutputStream outputStream = new FileOutputStream("mix");
+        final OutputStream outputStream = new FileOutputStream("mix");
             for (int i = 0; i < amount; i++) {
                 final boolean choice = random.nextBoolean();
                 if (choice) {
@@ -112,8 +140,14 @@ public final class ammo_generator {
                     createPutRequest(key, outputStream);
                 }
             }
+        outputStream.close();
     }
 
+    /**
+     *Create all ammo.
+     *
+     * @throws IOException
+     */
     public static void main(final String[] args) throws IOException {
         putUnique(50000);
         mixed(50000);
@@ -121,4 +155,4 @@ public final class ammo_generator {
         getNew(50000);
         put10Overwrite(50000);
     }
-;}
+}
