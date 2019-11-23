@@ -61,7 +61,6 @@ public final class AmmoGenerator {
      * Create put requests with 10% overwrite.
      *
      * @param amount - needed amount of request
-     * @throws IOException
      */
    public static void put10Overwrite(final long amount) throws IOException {
        int nextKey = 0;
@@ -83,7 +82,6 @@ public final class AmmoGenerator {
      * Create get request.
      *
      * @param amount - needed amount of request
-     * @throws IOException
      */
     public static void get(final int amount) throws IOException {
         final OutputStream outputStream = new FileOutputStream("get");
@@ -98,7 +96,6 @@ public final class AmmoGenerator {
      * Create get request with offset.
      *
      * @param amount - needed amount of request
-     * @throws IOException
      */
     public static void getNew(final long amount) throws IOException {
         long key = 0;
@@ -125,7 +122,6 @@ public final class AmmoGenerator {
      * Create mixed requests.
      *
      * @param amount - needed amount of request
-     * @throws IOException
      */
     public static void mixed(final long amount) throws IOException {
         int getKey = 1;
@@ -146,7 +142,6 @@ public final class AmmoGenerator {
     /**
      *Create all ammo.
      *
-     * @throws IOException
      */
     public static void main(final String[] args) throws IOException {
         putUnique(50000);
